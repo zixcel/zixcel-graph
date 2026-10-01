@@ -1,0 +1,53 @@
+[package]
+name = "zixcel-graph"
+version = "0.10.0"
+edition = "2024"
+rust-version = "1.97"
+description = "Reusable embedded typed property multigraph for the Zixcel ecosystem"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/zixcel/zixcel-graph"
+homepage = "https://github.com/zixcel/zixcel-graph"
+documentation = "https://docs.rs/zixcel-graph"
+publish = ["zixcel-private"]
+exclude = ["conformance/**/Cargo.lock", "*.tgz", "**/*.tgz", "/registration/**", "/state/**", "/.local/**", "/.state/**", "/.data/**", "/secrets/**", "/credentials/**", "/.env", "/.env.production", "/.env.local", "/*.tgz", "/*.tar.gz", "/*.tar", "/*.zip", "/*.whl", "/*.crate", "/.ruff_cache/**", "/.mypy_cache/**", "/.tox/**", "/.nox/**", "/.hypothesis/**", "/.coverage", "/.coverage.*", "/htmlcov/**", "/lcov.info", "/junit.xml", "/*.profraw", "/*.profdata", "/*.egg-info/**", "/target/**", "/node_modules/**", "/dist/**", "/build/**", "/.cache/**", "/.pytest_cache/**", "/coverage/**"]
+
+[package.metadata.zixcel]
+boundary = "embedded-graph-database"
+domain-model = false
+server = false
+
+[workspace]
+members = ["."]
+resolver = "3"
+
+[dependencies]
+zixcel-revision = { version = "=0.10.0", registry = "zixcel-private" }
+redb = { version = "4.1.0", optional = true }
+sha2 = "0.10.9"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149", optional = true }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[features]
+default = []
+graph = ["dep:serde_json"]
+redb = ["dep:redb", "dep:serde_json", "zixcel-revision/redb"]
+
+[[test]]
+name = "graph_acceptance"
+required-features = ["graph", "redb"]
+
+[[test]]
+name = "topology_fixture"
+required-features = ["graph"]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

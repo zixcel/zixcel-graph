@@ -1,0 +1,25 @@
+[package]
+name = "graph-lifecycle-conformance"
+version = "0.10.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+zixcel-graph = { version = "=0.10.0", registry = "zixcel-private", features = ["graph", "redb"] }
+zixcel-revision = { version = "=0.10.0", registry = "zixcel-private" }
+serde_json = "1"
+
+[features]
+default = ["graph", "redb"]
+graph = ["zixcel-graph/graph"]
+redb = ["zixcel-graph/redb"]
+
+[dev-dependencies]
+tempfile = "3"
+
+# Same conformance scenario, but the implementation is the registry crate.
+[[test]]
+name = "registry_read_dependencies"
+path = "../../tests/read_dependencies.rs"
