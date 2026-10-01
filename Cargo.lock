@@ -313,7 +313,7 @@ dependencies = [
 name = "zixcel-revision"
 version = "0.10.0"
 source = "sparse+https://zixcel-private.invalid/cargo/index/"
-checksum = "f38adf85cc811fd9e77f2e6f21afb83877374c49d3a7218cb29acd4bb2e40ae6"
+checksum = "712845cc67b0861d14d4cfb8014c843a8ba9f2da4a4e19a2e015b182be723e84"
 dependencies = [
  "redb",
  "serde",
