@@ -1,5 +1,28 @@
 # zixcel-graph
 
+Store a reviewed set of relationships as an exact snapshot and update it with revision checks.
+
+## What you can do
+
+- Create graph spaces and immutable snapshots.
+- Apply bounded changes and detect competing updates.
+
+## Current scope
+
+Applications determine the meaning and authority of graph data. Storing a relationship does not make it authoritative.
+
+Package distribution is not activated by this documentation. Use the checked-in source and the declared dependency versions; published availability must be verified separately.
+
+## Getting started
+
+Install Rust 1.97 or newer and make the declared dependencies available. Use the configured private registry when a dependency is not distributed publicly. Run from this repository:
+
+```sh
+cargo test --locked
+```
+
+## Examples and interface details
+
 ## Exact cross-space publication (0.10.0 development contract)
 
 `read_exact` returns one immutable Graph snapshot and its covering `RevisionRef`.
@@ -99,43 +122,6 @@ does not make that guarantee. See `tests/shutdown_barriers.rs` for bounded child
 process EOF/TERM/KILL/crash checks at exact prepared/committed barriers.
 `Graph::create(path)` explicitly permits creation. It does not initialize existing databases; it preserves migration records and validates every table and version without silently repairing missing data.
 
-## v1 boundary
-
-- Primary Node/Edge records and derived label/adjacency indexes
-- Atomic writes, concurrent snapshot reads and revision conflict detection
-- Directed/undirected logical edges and parallel edges
-- Label lookup, incoming/outgoing edges, neighbors and bounded traversal/path queries
-- Deterministic index rebuild from primary records
-- Explicit logical format/schema/index/backend metadata
-- In-memory/redb backend parity
-
-Custom pagers, B-trees, WALs, servers, network protocols, SQL/Cypher/SPARQL, full-text/vector search and domain inference are out of scope. redb types are not exposed in the public API.
-
-## Atomic publication port (C3 prerequisite)
-
-The caller fingerprints the complete formal input, including Subject, selected
-references and decisions. This fingerprint is not the Foundation RevisionRef.
-Graph calculates no authorization or semantic meaning.
-
-`replay` checks known receipt/payload identity and new-operation admissibility on
-a disposable read image, without canonical mutation. `publish` rechecks under
-the actual storage writer. Known replay returns the original receipt before
-the calculate/authorization/prepare callbacks; a new stale request returns the
-Foundation Stale variant. The original graph delta can be read by its exact
-receipt with `committed_changes`, independent of current records.
-
-The memory writer and the single redb transaction publish graph nodes, edges,
-indexes, Foundation image/head/receipt together. There is no additional database,
-replay index owned by the graph layer, or external-effect transaction.
-Receipt encoding is bounded by the Foundation 1 MiB payload limit; external
-semantic memory stays in its owner's repository.
-
-Immutable preparation can leave an external orphan after a later storage failure.
-The repository alone owns actual reclamation, using Foundation reservation,
-retention and fenced reclamation permits (see the commit contract).
-Old databases without the current commits table reject instead of repairing or
-reading a legacy fallback. Development data must be recreated explicitly.
-
 ## ZG1 external registration lifecycle
 
 Commit receipts and DAG metadata remain immutable replay roots. External byte
@@ -174,12 +160,10 @@ The development commit image format is 2; previous layouts are rejected, not
 silently defaulted/migrated. The crate version remains 0.10.0. Exact historical
 registration within a valid current image is distinct from storage migration.
 
-## Package integration
+## Documentation and source
 
-The package is an independently consumable unit. Callers reference its documented
-interface through a versioned dependency and own application-specific composition
-and integration.
+[Interface reference](docs/interface-reference.md)
 
-## Distribution license
+[Usage guide](docs/getting-started.md)
 
-Apache-2.0. Copyright 2026 HAT Inc. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Earlier license files and third-party terms remain applicable to their respective portions.
+[Detailed documentation](docs) · [Implementation and public interfaces](src) · [Verification cases](tests) · [Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md) · [License](LICENSE) · [Attribution notices](NOTICE)
