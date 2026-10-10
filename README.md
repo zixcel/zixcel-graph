@@ -11,11 +11,11 @@ Store a reviewed set of relationships as an exact snapshot and update it with re
 
 Applications determine the meaning and authority of graph data. Storing a relationship does not make it authoritative.
 
-Package distribution is not activated by this documentation. Use the checked-in source and the declared dependency versions; published availability must be verified separately.
+This reusable library is packaged independently for crates.io. Its declared library dependencies are available from the public registry; no private index or sibling source checkout is required.
 
 ## Getting started
 
-Install Rust 1.97 or newer and make the declared dependencies available. Use the configured private registry when a dependency is not distributed publicly. Run from this repository:
+Install Rust 1.97 or newer and make the declared dependencies available. All declared library dependencies resolve from crates.io. Run from this repository:
 
 ```sh
 cargo test --locked
@@ -167,3 +167,7 @@ registration within a valid current image is distinct from storage migration.
 [Usage guide](docs/getting-started.md)
 
 [Detailed documentation](docs) · [Implementation and public interfaces](src) · [Verification cases](tests) · [Contributing](CONTRIBUTING.md) · [Security reporting](SECURITY.md) · [License](LICENSE) · [Attribution notices](NOTICE)
+
+## Independent Cargo consumer
+
+Add `zixcel-graph = "0.10.0"` to a Rust 1.97 application. Select only the documented features required by the caller. Storage locations, network authority and runtime orchestration are supplied explicitly by the application.
