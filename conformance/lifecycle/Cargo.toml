@@ -7,8 +7,8 @@ publish = false
 [workspace]
 
 [dependencies]
-zixcel-graph = { version = "=0.10.0", registry = "zixcel-private", features = ["graph", "redb"] }
-zixcel-revision = { version = "=0.10.0", registry = "zixcel-private" }
+zixcel-graph = { version = "=0.10.0", features = ["graph", "redb"] }
+zixcel-revision = { version = "=0.10.0" }
 serde_json = "1"
 
 [features]
