@@ -114,3 +114,7 @@ read methods; retained transactions return their reservations on drop. Existing
 write/revision behavior is preserved. These source-only APIs and their scope limits
 are described in [resource boundary](resources/README.md). Global cache/RSS/disk,
 startup and caller-owned result copies remain distinct #113 work.
+
+## Concurrent write admission
+
+`BoundedWriter` owns an explicit writer family with shared `WriteLimits`: reserve before snapshot load, intersect caller budgets, hold through commit, release on every refusal/conflict/drop. The isolated playground tests slot refusal/reuse as well as read retention. `tests/bounded_writer.rs` covers memory/durable atomicity and concurrent clone admission. Other Graph aliases/direct publication, transient copies, cache/RSS and physical disk remain outside this policy and #113 remains open.

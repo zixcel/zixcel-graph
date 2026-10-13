@@ -173,3 +173,5 @@ registration within a valid current image is distinct from storage migration.
 Add `zixcel-graph = "0.10.0"` to a Rust 1.97 application. Select only the documented features required by the caller. Storage locations, network authority and runtime orchestration are supplied explicitly by the application.
 
 [OSS responsibility and source completion](docs/oss-source-contract.md) defines the supported package boundary and required acceptance. It does not declare unexecuted source, distribution or production checks complete.
+
+For finite concurrent write staging, use `BoundedWriter` with shared `WriteLimits`. The [resource guide](docs/resources/README.md) states admission boundaries and remaining cache/RSS/disk limits.

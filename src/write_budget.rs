@@ -13,6 +13,7 @@ pub struct WriteBudget {
 
 pub struct BudgetedWriteTransaction {
     inner: WriteTransaction,
+    pub(crate) lease: Option<crate::bounded_writer::WriteLease>,
     counter: Counter<'static>,
     remaining: usize,
     refused: Refusal,
@@ -27,6 +28,7 @@ impl BudgetedWriteTransaction {
     pub(crate) fn new(inner: WriteTransaction, budget: WriteBudget) -> Self {
         Self {
             inner,
+            lease: None,
             counter: Counter::new(ReadBudget {
                 max_nodes: 0,
                 max_edges: 0,
@@ -95,6 +97,7 @@ impl BudgetedWriteTransaction {
     /// A refused mutation, final stored-state quota, conflict or storage failure
     /// leaves canonical state unchanged. No successful prefix is published.
     pub fn commit(self) -> Result<u64, GraphError> {
+        let _lease = self.lease;
         match self.refused {
             Refusal::Capacity => return Err(zixcel_revision::Failure::Capacity.into()),
             Refusal::Mutation => {
