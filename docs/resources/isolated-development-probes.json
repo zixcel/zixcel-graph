@@ -1,0 +1,62 @@
+{
+  "scope": "bounded development probe, not target-device acceptance or causal performance comparison",
+  "source_sha": "f5eab68d436f1895b6a2f697636266638763f0b7",
+  "container_limits": {
+    "memory_bytes": 268435456,
+    "swap_additional_bytes": 0,
+    "cpus": 1,
+    "pids": 32,
+    "network": "none",
+    "rootfs": "read-only"
+  },
+  "fixture": {
+    "seed": 0,
+    "nodes": 1000,
+    "edges_per_space": 999,
+    "payload_bytes": 128,
+    "spaces": 4
+  },
+  "observations": {
+    "tmpfs_one_space": {
+      "db_bytes": 8392704,
+      "edges_per_space": 999,
+      "fixture": "chain-v1",
+      "import_us": 381518,
+      "nodes_per_space": 1000,
+      "payload_bytes": 128,
+      "process_peak_rss_kib": 28800,
+      "profile": "debug",
+      "read_p50_us": 78440,
+      "read_p95_us": 84941,
+      "read_samples": 20,
+      "reopen_and_read_us": 111868,
+      "seed": 0,
+      "single_update_us": 752703,
+      "spaces": 1,
+      "update_os_write_bytes": 0
+    },
+    "host_temp_disk_four_spaces": {
+      "db_bytes": 16781312,
+      "edges_per_space": 999,
+      "fixture": "chain-v1",
+      "import_us": 1626439,
+      "nodes_per_space": 1000,
+      "payload_bytes": 128,
+      "process_peak_rss_kib": 36536,
+      "profile": "debug",
+      "read_p50_us": 63588,
+      "read_p95_us": 77542,
+      "read_samples": 20,
+      "reopen_and_read_us": 98121,
+      "seed": 0,
+      "single_update_us": 553802,
+      "spaces": 4,
+      "update_os_write_bytes": 2138112
+    }
+  },
+  "constraints": [
+    "Two probes differ in storage medium and space count; do not compare as a speedup.",
+    "OS write_bytes does not attribute all physical storage/cache IO.",
+    "Image candidate remains vulnerability-rejected and is not a production/runtime recommendation."
+  ]
+}
