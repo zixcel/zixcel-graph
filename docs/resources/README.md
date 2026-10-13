@@ -38,3 +38,9 @@ repair or memory fallback occurs on refusal. Existing unbudgeted APIs, writes,
 startup validation, snapshot retention and allocator overhead remain outside this
 per-read admission contract. Use external process limits for total RSS until those
 separate resource paths have explicit budgets too.
+
+`Graph::read_exact_budgeted(space, budget)` applies the same admission to data
+and the covering canonical revision from one physical storage snapshot. A refusal
+returns neither data nor revision; retained earlier snapshots keep their earlier
+values. This API is also unreleased. Neither API bounds the number of snapshots a
+consumer retains, or replaces the outstanding write/startup resource work.

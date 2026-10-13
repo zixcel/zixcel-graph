@@ -108,3 +108,46 @@ fn an_edge_limit_refuses_the_complete_snapshot() {
             .is_some()
     );
 }
+
+fn verify_exact(graph: &Graph) {
+    let space = GraphSpace::new("exact-budget").unwrap();
+    let mut tx = graph.write(&space).unwrap();
+    tx.upsert_node(Node::new("first", ["fixture"]).unwrap());
+    tx.commit().unwrap();
+    let (old, old_revision) = graph.read_exact_budgeted(&space, limits()).unwrap();
+    assert_eq!(old.revision(), old_revision.sequence);
+    let mut tx = graph.write(&space).unwrap();
+    tx.upsert_node(Node::new("second", ["fixture"]).unwrap());
+    tx.commit().unwrap();
+    let (new, new_revision) = graph.read_exact_budgeted(&space, limits()).unwrap();
+    assert!(new_revision.sequence > old_revision.sequence);
+    assert_eq!(new.revision(), new_revision.sequence);
+    assert!(old.get_node("second").is_none());
+    assert!(new.get_node("second").is_some());
+    for rejected in [
+        ReadBudget {
+            max_nodes: 1,
+            ..limits()
+        },
+        ReadBudget {
+            max_source_bytes: 1,
+            ..limits()
+        },
+    ] {
+        assert!(matches!(
+            graph.read_exact_budgeted(&space, rejected),
+            Err(GraphError::Commit(zixcel_revision::Failure::Capacity))
+        ));
+    }
+    assert_eq!(graph.read_exact(&space).unwrap().1, new_revision);
+}
+#[test]
+fn memory_exact_budget_preserves_revision_and_retained_snapshot() {
+    verify_exact(&Graph::memory().unwrap());
+}
+#[test]
+#[cfg(feature = "redb")]
+fn durable_exact_budget_preserves_revision_and_retained_snapshot() {
+    let root = tempfile::tempdir().unwrap();
+    verify_exact(&Graph::create(root.path().join("exact.redb")).unwrap());
+}

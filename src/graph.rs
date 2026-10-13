@@ -99,6 +99,20 @@ impl Graph {
         Ok((ReadTransaction::new(snapshot.graph), revision))
     }
 
+    /// Read bounded data and canonical revision from the same physical snapshot.
+    /// # Errors
+    /// Capacity exhaustion returns no data or revision and never repairs storage.
+    /// Limits cover source bytes/records, not process RSS or retained snapshots.
+    pub fn read_exact_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<(ReadTransaction, zixcel_revision::RevisionRef), GraphError> {
+        let snapshot = self.storage.snapshot_budgeted(space, budget)?;
+        let revision = snapshot.commits.head_revision(space.as_str());
+        Ok((ReadTransaction::new(snapshot.graph), revision))
+    }
+
     /// Opens an optimistic write transaction for one graph space.
     ///
     /// # Errors

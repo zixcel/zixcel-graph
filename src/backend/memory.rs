@@ -52,6 +52,26 @@ impl Storage for MemoryStorage {
             .map_err(|_| zixcel_revision::Failure::Storage)?;
         Ok(spaces.get(space.as_str()).cloned().unwrap_or_default())
     }
+    fn snapshot_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<StoredSpace, GraphError> {
+        let spaces = self
+            .spaces
+            .read()
+            .map_err(|_| zixcel_revision::Failure::Storage)?;
+        if let Some(stored) = spaces.get(space.as_str()) {
+            crate::read_budget::Counter::new(budget).stored(
+                space.as_str(),
+                &stored.graph,
+                &stored.commits,
+            )?;
+            Ok(stored.clone())
+        } else {
+            Ok(StoredSpace::default())
+        }
+    }
     fn load_commits(&self, space: &GraphSpace) -> Result<CommitState, GraphError> {
         let spaces = self
             .spaces
@@ -111,21 +131,9 @@ impl Storage for MemoryStorage {
         space: &GraphSpace,
         budget: crate::ReadBudget,
     ) -> Result<SpaceState, GraphError> {
-        let spaces = self
-            .spaces
-            .read()
-            .map_err(|_| zixcel_revision::Failure::Storage)?;
-        if let Some(stored) = spaces.get(space.as_str()) {
-            crate::read_budget::Counter::new(budget).stored(
-                space.as_str(),
-                &stored.graph,
-                &stored.commits,
-            )?;
-            Ok(stored.graph.clone())
-        } else {
-            Ok(SpaceState::default())
-        }
+        Ok(self.snapshot_budgeted(space, budget)?.graph)
     }
+
     fn load(&self, space: &GraphSpace) -> Result<SpaceState, GraphError> {
         let spaces = self
             .spaces

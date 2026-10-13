@@ -345,6 +345,25 @@ impl Storage for RedbStorage {
             })
         })
     }
+    fn snapshot_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<StoredSpace, GraphError> {
+        self.database.read(|read| {
+            // The loader charges commit bytes before decoding. Data and revision
+            // must come from this one physical snapshot, never separate reads.
+            Ok(StoredSpace {
+                graph: Self::load_from_read(
+                    read,
+                    space,
+                    true,
+                    &mut crate::read_budget::Counter::new(budget),
+                )?,
+                commits: read_commits(read, space)?,
+            })
+        })
+    }
     fn load_commits(&self, space: &GraphSpace) -> Result<CommitState, GraphError> {
         self.database.read(|read| read_commits(read, space))
     }

@@ -32,6 +32,11 @@ use crate::{GraphError, GraphMetadata, GraphSpace};
 pub(crate) trait Storage: Send + Sync {
     fn lifecycle(&self, space: &GraphSpace, change: LifecycleChange<'_>) -> Result<(), GraphError>;
     fn snapshot(&self, space: &GraphSpace) -> Result<StoredSpace, GraphError>;
+    fn snapshot_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<StoredSpace, GraphError>;
     fn load_commits(&self, space: &GraphSpace) -> Result<CommitState, GraphError>;
     fn publish(
         &self,
