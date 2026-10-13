@@ -34,7 +34,8 @@
           "transaction::{ReadTransaction, WriteTransaction}",
           "read_budget::ReadBudget",
           "write_budget::{BudgetedWriteTransaction, WriteBudget}",
-          "storage_budget::StorageValidationBudget"
+          "storage_budget::StorageValidationBudget",
+          "read_retention::ReadLimits"
         ],
         "implicit_bins": []
       },
@@ -134,8 +135,8 @@
               "condition": null
             },
             {
-              "name": "Exercise behavioral and documentation tests",
-              "run": "cargo +1.97 test --locked --all-features",
+              "name": "Exercise behavioral and documentation tests for supported feature sets",
+              "run": "cargo +1.97 test --locked --all-targets --no-default-features\ncargo +1.97 test --locked --all-targets --no-default-features --features graph\ncargo +1.97 test --locked --all-targets --no-default-features --features redb\ncargo +1.97 test --locked --all-features\n",
               "uses": null,
               "condition": null
             },

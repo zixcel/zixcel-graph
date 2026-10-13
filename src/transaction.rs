@@ -8,11 +8,19 @@ use std::sync::Arc;
 
 pub struct ReadTransaction {
     state: SpaceState,
+    retention: Option<crate::read_retention::ReadLease>,
 }
 
 impl ReadTransaction {
     pub(crate) fn new(state: SpaceState) -> Self {
-        Self { state }
+        Self {
+            state,
+            retention: None,
+        }
+    }
+
+    pub(crate) fn retain(&mut self, lease: Option<crate::read_retention::ReadLease>) {
+        self.retention = lease;
     }
 
     #[must_use]
@@ -299,6 +307,7 @@ impl WriteTransaction {
         let request = intent.request("graph/write", &changes)?;
         let graph = crate::Graph {
             storage: self.storage,
+            read_retention: None,
         };
         let result = graph.publish_with_budget(
             &self.space,

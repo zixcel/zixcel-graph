@@ -59,6 +59,7 @@ impl Graph {
             Ok(StartedGraph {
                 graph: Graph {
                     storage: Arc::new(backend),
+                    read_retention: None,
                 },
                 recovery_performed,
                 recovery_duration,

@@ -1,5 +1,5 @@
 //! Synthetic write/read/refusal playground; no existing DB or cloud account.
-use zixcel_graph::{Graph, GraphSpace, Node, ReadBudget, WriteBudget};
+use zixcel_graph::{Graph, GraphSpace, Node, ReadBudget, ReadLimits, WriteBudget};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let graph = Graph::memory()?;
     let space = GraphSpace::new("playground")?;
@@ -16,7 +16,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut write = graph.write_budgeted(&space, budget)?;
     write.upsert_node(Node::new("example", ["example"])?)?;
     let committed = write.commit()?;
+    let graph = graph.with_read_limits(ReadLimits {
+        snapshot: budget.snapshot,
+        max_retained_snapshots: 1,
+    })?;
     let (snapshot, revision) = graph.read_exact_budgeted(&space, budget.snapshot)?;
+    assert_eq!(graph.retained_reads(), Some(1));
+    assert!(graph.read(&space).is_err());
     assert_eq!(committed, revision.sequence);
     assert!(snapshot.get_node("example").is_some());
     let mut refused = graph.write_budgeted(

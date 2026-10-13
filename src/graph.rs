@@ -9,9 +9,29 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct Graph {
     pub(crate) storage: Arc<dyn Storage>,
+    pub(crate) read_retention: Option<Arc<crate::read_retention::Retention>>,
 }
 
 impl Graph {
+    /// Configure per-read admission and retained snapshot count for this handle and subsequent clones.
+    /// Previously created unconfigured handles, writer staging and caller-owned query outputs are outside this policy.
+    /// # Errors
+    /// Refuses zero/overflowing limits and reconfiguration of an already configured family.
+    pub fn with_read_limits(mut self, limits: crate::ReadLimits) -> Result<Self, GraphError> {
+        if self.read_retention.is_some() {
+            return Err(GraphError::Invalid("read limits already configured".into()));
+        }
+        self.read_retention = Some(crate::read_retention::Retention::new(limits)?);
+        Ok(self)
+    }
+    /// Number of retained or in-progress reads admitted by this configured handle family.
+    #[must_use]
+    pub fn retained_reads(&self) -> Option<usize> {
+        self.read_retention
+            .as_ref()
+            .map(|retention| retention.count())
+    }
+
     /// Explicit physical redb recovery. Does not initialize missing graph data or tables.
     /// # Errors
     /// Missing/invalid storage remains an error; domain state is never reconstructed.
@@ -19,6 +39,7 @@ impl Graph {
     pub fn recover_existing(path: impl AsRef<Path>) -> Result<Self, GraphError> {
         Ok(Self {
             storage: Arc::new(RedbStorage::recover_existing(path.as_ref())?),
+            read_retention: None,
         })
     }
     /// Opens an existing durable graph or explicitly creates a new database.
@@ -32,6 +53,7 @@ impl Graph {
         storage.metadata()?;
         Ok(Self {
             storage: Arc::new(storage),
+            read_retention: None,
         })
     }
 
@@ -43,6 +65,7 @@ impl Graph {
     pub fn open_existing(path: impl AsRef<Path>) -> Result<Self, GraphError> {
         Ok(Self {
             storage: Arc::new(RedbStorage::open_existing(path.as_ref())?),
+            read_retention: None,
         })
     }
 
@@ -53,6 +76,7 @@ impl Graph {
     pub fn memory() -> Result<Self, GraphError> {
         Ok(Self {
             storage: Arc::new(MemoryStorage::new()),
+            read_retention: None,
         })
     }
 
@@ -69,6 +93,9 @@ impl Graph {
     /// # Errors
     /// Returns an error when primary records or derived indexes are invalid.
     pub fn read(&self, space: &GraphSpace) -> Result<ReadTransaction, GraphError> {
+        if let Some(retention) = &self.read_retention {
+            return self.read_budgeted(space, retention.limits.snapshot);
+        }
         Ok(ReadTransaction::new(self.storage.load(space)?))
     }
 
@@ -82,9 +109,17 @@ impl Graph {
         space: &GraphSpace,
         budget: crate::ReadBudget,
     ) -> Result<ReadTransaction, GraphError> {
-        Ok(ReadTransaction::new(
-            self.storage.load_budgeted(space, budget)?,
-        ))
+        let lease = self
+            .read_retention
+            .as_ref()
+            .map(crate::read_retention::Retention::acquire)
+            .transpose()?;
+        let budget = self.read_retention.as_ref().map_or(budget, |retention| {
+            crate::read_retention::intersect(budget, retention.limits.snapshot)
+        });
+        let mut result = ReadTransaction::new(self.storage.load_budgeted(space, budget)?);
+        result.retain(lease);
+        Ok(result)
     }
 
     /// Read data and its covering canonical revision from the same physical snapshot.
@@ -94,6 +129,9 @@ impl Graph {
         &self,
         space: &GraphSpace,
     ) -> Result<(ReadTransaction, zixcel_revision::RevisionRef), GraphError> {
+        if let Some(retention) = &self.read_retention {
+            return self.read_exact_budgeted(space, retention.limits.snapshot);
+        }
         let snapshot = self.storage.snapshot(space)?;
         let revision = snapshot.commits.head_revision(space.as_str());
         Ok((ReadTransaction::new(snapshot.graph), revision))
@@ -108,9 +146,19 @@ impl Graph {
         space: &GraphSpace,
         budget: crate::ReadBudget,
     ) -> Result<(ReadTransaction, zixcel_revision::RevisionRef), GraphError> {
+        let lease = self
+            .read_retention
+            .as_ref()
+            .map(crate::read_retention::Retention::acquire)
+            .transpose()?;
+        let budget = self.read_retention.as_ref().map_or(budget, |retention| {
+            crate::read_retention::intersect(budget, retention.limits.snapshot)
+        });
         let snapshot = self.storage.snapshot_budgeted(space, budget)?;
         let revision = snapshot.commits.head_revision(space.as_str());
-        Ok((ReadTransaction::new(snapshot.graph), revision))
+        let mut result = ReadTransaction::new(snapshot.graph);
+        result.retain(lease);
+        Ok((result, revision))
     }
 
     /// Opens an optimistic write transaction for one graph space.

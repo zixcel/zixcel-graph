@@ -75,3 +75,21 @@ it does not interrupt lock acquisition or an individual record decode. The API
 validates an already opened backend and does not bound its opening/cache/RSS,
 physical file size, concurrent growth or held snapshots. Existing startup/recovery
 entrypoints retain their explicit behavior and are not claimed budgeted by this API.
+
+## Retained read admission
+
+`Graph::with_read_limits(ReadLimits { snapshot, max_retained_snapshots })` configures
+this handle and subsequent clones. All four read entrypoints reserve one shared
+slot before loading data and intersect an explicit caller budget with the configured
+per-read budget. A retained `ReadTransaction` holds its slot; failed reads and drop
+return it. Reconfiguration cannot reset the family's live count. `retained_reads()`
+reports retained and in-progress reservations. Zero counts and overflowing aggregate
+source-byte limits are rejected.
+
+This bounds admitted source records/bytes and concurrent retained snapshots in the
+configured handle family. It does not count earlier unconfigured handles, separately
+opened databases, write staging, allocator/cache overhead, or caller-owned copies of
+query results. It is not a total RSS guarantee. No retained snapshot is evicted or
+rewritten when another read is refused; existing revision/conflict rules still apply.
+`tests/read_retention.rs` tests memory/durable parity, exact revisions, caller-budget
+intersection, failed-read release, cross-thread clones, drop and reconfiguration.

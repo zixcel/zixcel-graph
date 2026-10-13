@@ -105,3 +105,12 @@ same features. The synthetic memory write example requires only `graph`. These
 conditions preserve the documented revision-only defaults and do not add a backend
 or Graph API implicitly. Linux, including WSL, is the current product target;
 RAM capacity and product workload remain unspecified in #113.
+
+## Configured retained reads
+
+Read limits live in the graph implementation, not a new authority or wire schema.
+The configured Graph family shares admission across clone handles and all public
+read methods; retained transactions return their reservations on drop. Existing
+write/revision behavior is preserved. These source-only APIs and their scope limits
+are described in [resource boundary](resources/README.md). Global cache/RSS/disk,
+startup and caller-owned result copies remain distinct #113 work.
