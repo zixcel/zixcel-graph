@@ -53,7 +53,7 @@ impl Counter {
         Self::charge(&mut self.indexes, 1, self.limits.max_index_entries)?;
         self.bytes(key_bytes)
     }
-    fn encoded(&mut self, value: &impl serde::Serialize) -> Result<(), GraphError> {
+    pub(crate) fn encoded(&mut self, value: &impl serde::Serialize) -> Result<(), GraphError> {
         serde_json::to_writer(&mut *self, value)
             .map_err(|_| GraphError::Commit(zixcel_revision::Failure::Capacity))
     }

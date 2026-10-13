@@ -51,3 +51,8 @@ pub const INDEX_VERSION: u32 = 1;
 mod read_budget;
 #[cfg(feature = "graph")]
 pub use read_budget::ReadBudget;
+
+#[cfg(feature = "graph")]
+mod write_budget;
+#[cfg(feature = "graph")]
+pub use write_budget::{BudgetedWriteTransaction, WriteBudget};

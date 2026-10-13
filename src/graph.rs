@@ -126,6 +126,22 @@ impl Graph {
         ))
     }
 
+    /// Begin a write with bounded snapshot and cumulative mutation admission.
+    /// # Errors
+    /// Oversized existing state is rejected before cloning/decoding. Later mutation
+    /// refusal poisons the whole transaction; no prefix is committed.
+    pub fn write_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::WriteBudget,
+    ) -> Result<crate::BudgetedWriteTransaction, GraphError> {
+        let snapshot = self.storage.snapshot_budgeted(space, budget.snapshot)?;
+        let mut transaction =
+            WriteTransaction::new(Arc::clone(&self.storage), space.clone(), snapshot);
+        transaction.budget = Some(budget.snapshot);
+        Ok(crate::BudgetedWriteTransaction::new(transaction, budget))
+    }
+
     /// Rebuilds derived indexes atomically from primary node and edge records.
     ///
     /// # Errors

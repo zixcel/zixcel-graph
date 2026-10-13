@@ -86,12 +86,20 @@ impl Storage for MemoryStorage {
         &self,
         space: &GraphSpace,
         dependencies: &[crate::GraphReadDependency],
+        budget: Option<crate::ReadBudget>,
         publish: Publish<'_>,
     ) -> Result<GraphPublication, GraphError> {
         let mut spaces = self
             .spaces
             .write()
             .map_err(|_| zixcel_revision::Failure::Storage)?;
+        if let (Some(limits), Some(stored)) = (budget, spaces.get(space.as_str())) {
+            crate::read_budget::Counter::new(limits).stored(
+                space.as_str(),
+                &stored.graph,
+                &stored.commits,
+            )?;
+        }
         let mut proposed = spaces.get(space.as_str()).cloned().unwrap_or_default();
         #[cfg(test)]
         super::failure_tests::checkpoint(super::failure_tests::Point::Before)?;
@@ -106,6 +114,13 @@ impl Storage for MemoryStorage {
             .collect();
         let result = publish(&mut proposed, &actual)?;
         if matches!(result.outcome, CommitOutcome::Committed(_)) {
+            if let Some(limits) = budget {
+                crate::read_budget::Counter::new(limits).stored(
+                    space.as_str(),
+                    &proposed.graph,
+                    &proposed.commits,
+                )?;
+            }
             proposed.graph.validate()?;
             proposed.commits.validate()?;
             #[cfg(test)]

@@ -48,6 +48,7 @@ fn dependency_with_orphan_revision_image_is_corrupt_not_empty() {
             space: source,
             expected_revision: zixcel_revision::RevisionRef::default(),
         }],
+        None,
         Box::new(|_, _| panic!("corrupt source must not reach target application")),
     );
     assert!(matches!(result, Err(GraphError::Commit(Failure::Corrupt))));
@@ -371,19 +372,19 @@ impl Storage for RedbStorage {
         &self,
         space: &GraphSpace,
         dependencies: &[crate::GraphReadDependency],
+        budget: Option<crate::ReadBudget>,
         publish: Publish<'_>,
     ) -> Result<GraphPublication, GraphError> {
         self.database.write(|database| {
             // The database writer excludes both old graph writers and new control publications.
             let write = database.begin_write().map_err(storage)?;
             let read = database.begin_read().map_err(storage)?;
+            let mut counter = budget.map_or_else(
+                crate::read_budget::Counter::unlimited,
+                crate::read_budget::Counter::new,
+            );
             let mut proposed = StoredSpace {
-                graph: Self::load_from_read(
-                    &read,
-                    space,
-                    true,
-                    &mut crate::read_budget::Counter::unlimited(),
-                )?,
+                graph: Self::load_from_read(&read, space, true, &mut counter)?,
                 commits: read_commits(&read, space)?,
             };
             drop(read);
@@ -428,6 +429,13 @@ impl Storage for RedbStorage {
             };
             let result = publish(&mut proposed, &actual)?;
             if matches!(result.outcome, CommitOutcome::Committed(_)) {
+                if let Some(limits) = budget {
+                    crate::read_budget::Counter::new(limits).stored(
+                        space.as_str(),
+                        &proposed.graph,
+                        &proposed.commits,
+                    )?;
+                }
                 proposed.graph.validate()?;
                 proposed.commits.validate()?;
                 write_state(&write, space, &proposed.graph)?;

@@ -42,6 +42,7 @@ pub(crate) trait Storage: Send + Sync {
         &self,
         space: &GraphSpace,
         dependencies: &[crate::GraphReadDependency],
+        budget: Option<crate::ReadBudget>,
         publish: Publish<'_>,
     ) -> Result<GraphPublication, GraphError>;
     fn metadata(&self) -> Result<GraphMetadata, GraphError>;

@@ -77,3 +77,14 @@ Schema definitions in the map remain owned by their canonical validator and
 consumers. An absent schema file means no separate schema file is declared; it does
 not mean the runtime interface has no validation. Do not introduce another common
 schema solely to mirror an implementation type.
+
+## Budgeted mutation and atomic publication
+
+`WriteBudget` belongs to the graph implementation policy, not a product authority
+schema. `BudgetedWriteTransaction` admits cumulative mutation counts/bytes, poisons
+refused writes, and uses the same canonical revision publication path as existing
+transactions. Preview and backend writer-fence checks admit the complete stored
+state/receipt image before persistence. `tests/write_budget.rs` and the synthetic
+`examples/budgeted-write.rs` cover actual values/revisions and refusal without a
+successful-prefix commit. Per-write data bounds do not complete global RAM/cache,
+startup or retained-snapshot quotas; #113 remains open.

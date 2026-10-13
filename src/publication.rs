@@ -559,6 +559,20 @@ impl Graph {
         C: FnOnce(&ReadTransaction) -> Result<GraphChanges, GraphError>,
         P: FnOnce() -> Result<(), GraphError>,
     {
+        self.publish_with_budget(space, request, None, calculate, prepare)
+    }
+    pub(crate) fn publish_with_budget<C, P>(
+        &self,
+        space: &GraphSpace,
+        request: &PublicationRequest,
+        budget: Option<crate::ReadBudget>,
+        calculate: C,
+        prepare: P,
+    ) -> Result<GraphPublication, GraphError>
+    where
+        C: FnOnce(&ReadTransaction) -> Result<GraphChanges, GraphError>,
+        P: FnOnce() -> Result<(), GraphError>,
+    {
         if request.request_digest.len() != 64
             || !request
                 .request_digest
@@ -570,13 +584,31 @@ impl Graph {
                 None,
             ));
         }
-        if let Some(original) = self.replay(space, request)? {
+        if budget.is_none()
+            && let Some(original) = self.replay(space, request)?
+        {
             return Ok(original);
         }
         // The detached immutable target snapshot is covered by the target base CAS.
         // No consumer closure runs while Graph/revision storage ownership is held.
-        let snapshot = self.storage.snapshot(space)?;
+        let snapshot = match budget {
+            Some(limits) => self.storage.snapshot_budgeted(space, limits)?,
+            None => self.storage.snapshot(space)?,
+        };
+        if budget.is_some() {
+            let backend = ImageBackend(Mutex::new(snapshot.commits.clone()));
+            if let Some(original) = replay(&CommitStore::new(&backend), space, request)? {
+                return Ok(original);
+            }
+        }
         if snapshot.commits.head_revision(space.as_str()) != request.expected_commit_revision {
+            if budget.is_some() {
+                let backend = ImageBackend(Mutex::new(snapshot.commits));
+                let conflict = CommitStore::new(&backend)
+                    .check_base(space.as_str(), &request.expected_commit_revision)?
+                    .ok_or(Failure::Corrupt)?;
+                return Ok(finished(CommitOutcome::Conflict(conflict), None));
+            }
             return self
                 .replay(space, request)?
                 .ok_or_else(|| Failure::Corrupt.into());
@@ -589,10 +621,18 @@ impl Graph {
         }
         // Only immutable object preparation belongs here. Domain owners must not
         // treat a callback as canonical acceptance: final CAS may still lose.
+        if let Some(limits) = budget {
+            crate::read_budget::Counter::new(limits).stored(
+                space.as_str(),
+                &preview.graph,
+                &preview.commits,
+            )?;
+        }
         prepare()?;
         self.storage.publish(
             space,
             &request.dependencies,
+            budget,
             Box::new(move |stored, actual| {
                 let backend = ImageBackend(Mutex::new(stored.commits.clone()));
                 if let Some(original) = replay(&CommitStore::new(&backend), space, request)? {

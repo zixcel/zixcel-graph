@@ -44,3 +44,22 @@ and the covering canonical revision from one physical storage snapshot. A refusa
 returns neither data nor revision; retained earlier snapshots keep their earlier
 values. This API is also unreleased. Neither API bounds the number of snapshots a
 consumer retains, or replaces the outstanding write/startup resource work.
+
+## Explicit write admission
+
+`Graph::write_budgeted(space, WriteBudget { snapshot, max_updates,
+max_update_bytes })` is an unreleased source API. The initial snapshot is admitted
+before decoding/cloning. Mutation calls cumulatively consume count and streamed
+JSON byte limits before their input is retained. Replacements/removals count too.
+Any refused mutation poisons the transaction, so an already staged prefix cannot
+be committed. The final state, derived indexes and canonical receipt image must
+fit `snapshot` limits before publication; the backend checks these limits again
+under its atomic writer fence. An existing concurrent revision is never overwritten.
+
+Run `cargo run --locked --offline --features graph --example budgeted-write` for
+an explicit synthetic use case. Five memory/durable journeys check normal writes,
+quota refusal, unchanged canonical values/revisions, retained snapshots, attached
+edge errors, final receipt bytes and concurrent conflicts. Inputs are caller-owned
+before the API receives them; this contract bounds retained source/mutation data,
+not allocator overhead, total RSS, database cache, startup, snapshot retention or
+aggregate space count. These remaining resource paths stay in #113.
