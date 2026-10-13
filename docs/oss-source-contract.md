@@ -41,3 +41,39 @@ Inventory baseline source: `b6cf6563e02548244fa76a55b43e37260be619b0`. This base
 ## Resource acceptance
 
 See [resource boundary and measurements](resources/README.md). Exact-space range reads and differential persistence are implemented and retain transaction semantics. Complete selected-space materialization remains an explicit constraint; Issue #113 tracks bounded storage and operating budgets. No target hardware/RAM guarantee is inferred from source tests.
+
+## Exact snapshot admission
+
+The source APIs `read_budgeted` and `read_exact_budgeted` share `ReadBudget`.
+The latter returns data and canonical revision from one storage snapshot, preserving
+optimistic concurrency identity. Both memory and redb reject capacity overflow
+without partial results or changing durable state. `tests/read_budget.rs` covers
+counts, bytes, index entries, edges, exact revisions and retained prior snapshots.
+Write/startup/retention/process-RSS budgets remain tracked in coela-release#113;
+these read APIs alone do not fulfill the complete resource target.
+
+## Owned source and acceptance map
+
+[oss-source-map.json](oss-source-map.json) is the tracked map of package
+interfaces, declared commands, schemas, functional test sources, examples and CI
+jobs. It keeps each responsibility attached to its actual physical source owner.
+Public exports are supported only within this repository's responsibility boundary;
+a filename or schema declaration does not grant product or cloud authority.
+
+| Package | Canonical manifest | Responsibility/interface |
+| --- | --- | --- |
+| `zixcel-graph` | [Cargo.toml](../Cargo.toml) | Reusable embedded typed property multigraph for the Zixcel ecosystem |
+| `graph-lifecycle-conformance` | [conformance/lifecycle/Cargo.toml](../conformance/lifecycle/Cargo.toml) | Declared Rust public modules/reexports and binary targets |
+
+For source acceptance, run each applicable functional CI job with the committed
+locks from an independent checkout. Match public entrypoints to their test/example
+sources in the map; test the relevant invalid input and failure boundary as well as
+the normal path. Policy-only, skipped and credential-dependent jobs do not establish
+functional coverage. Release jobs establish artifact acceptance only when actually
+run at the reviewed commit. A source-only/example repository must not be presented
+as a complete external service or a released package.
+
+Schema definitions in the map remain owned by their canonical validator and
+consumers. An absent schema file means no separate schema file is declared; it does
+not mean the runtime interface has no validation. Do not introduce another common
+schema solely to mirror an implementation type.
