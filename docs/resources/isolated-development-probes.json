@@ -52,6 +52,14 @@
       "single_update_us": 553802,
       "spaces": 4,
       "update_os_write_bytes": 2138112
+    },
+    "host_temp_disk_10000_one_space": {
+      "status": "refused",
+      "error": "publication input is invalid or too large",
+      "nodes_per_space": 10000,
+      "spaces": 1,
+      "resource_limits_same": true,
+      "note": "No throughput/RSS target acceptance. The current fixture submits one complete import; bounded batch import remains to be designed."
     }
   },
   "constraints": [
