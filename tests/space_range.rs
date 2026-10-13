@@ -1,4 +1,4 @@
-#![cfg(feature = "redb")]
+#![cfg(all(feature = "graph", feature = "redb"))]
 use zixcel_graph::{Edge, Graph, GraphSpace, Node};
 #[test]
 fn shared_prefix_spaces_keep_exact_indexes_during_updates_deletes_and_reopen() {
