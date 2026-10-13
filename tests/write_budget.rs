@@ -67,7 +67,7 @@ fn verify(graph: &Graph) {
     assert!(graph.read(&space).unwrap().get_node("too-many").is_none());
     let mut tx = graph.write_budgeted(&space, limits()).unwrap();
     assert!(tx.remove_node("a").is_err());
-    capacity(&tx.commit());
+    assert!(matches!(tx.commit(), Err(GraphError::Invalid(_))));
     assert_eq!(graph.read_exact(&space).unwrap().1, identity);
     let mut tx = graph.write_budgeted(&space, limits()).unwrap();
     tx.remove_edge("ab").unwrap();

@@ -15,8 +15,14 @@ pub struct BudgetedWriteTransaction {
     inner: WriteTransaction,
     counter: Counter,
     remaining: usize,
-    refused: bool,
+    refused: Refusal,
 }
+enum Refusal {
+    None,
+    Capacity,
+    Mutation,
+}
+
 impl BudgetedWriteTransaction {
     pub(crate) fn new(inner: WriteTransaction, budget: WriteBudget) -> Self {
         Self {
@@ -28,7 +34,7 @@ impl BudgetedWriteTransaction {
                 max_source_bytes: budget.max_update_bytes,
             }),
             remaining: budget.max_updates,
-            refused: false,
+            refused: Refusal::None,
         }
     }
     #[must_use]
@@ -37,13 +43,18 @@ impl BudgetedWriteTransaction {
     }
 
     fn admit(&mut self, input: &impl serde::Serialize) -> Result<(), GraphError> {
-        if self.refused || self.remaining == 0 {
-            self.refused = true;
+        if matches!(self.refused, Refusal::Mutation) {
+            return Err(GraphError::Invalid(
+                "write transaction refused after mutation failure".into(),
+            ));
+        }
+        if matches!(self.refused, Refusal::Capacity) || self.remaining == 0 {
+            self.refused = Refusal::Capacity;
             return Err(zixcel_revision::Failure::Capacity.into());
         }
         self.remaining -= 1;
         if let Err(error) = self.counter.encoded(input) {
-            self.refused = true;
+            self.refused = Refusal::Capacity;
             return Err(error);
         }
         Ok(())
@@ -75,7 +86,7 @@ impl BudgetedWriteTransaction {
         match self.inner.remove_node(id) {
             Ok(node) => Ok(node),
             Err(error) => {
-                self.refused = true;
+                self.refused = Refusal::Mutation;
                 Err(error)
             }
         }
@@ -84,8 +95,14 @@ impl BudgetedWriteTransaction {
     /// A refused mutation, final stored-state quota, conflict or storage failure
     /// leaves canonical state unchanged. No successful prefix is published.
     pub fn commit(self) -> Result<u64, GraphError> {
-        if self.refused {
-            return Err(zixcel_revision::Failure::Capacity.into());
+        match self.refused {
+            Refusal::Capacity => return Err(zixcel_revision::Failure::Capacity.into()),
+            Refusal::Mutation => {
+                return Err(GraphError::Invalid(
+                    "write transaction refused after mutation failure".into(),
+                ));
+            }
+            Refusal::None => {}
         }
         self.inner.commit()
     }
