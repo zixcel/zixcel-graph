@@ -1,0 +1,232 @@
+{
+  "repository": "zixcel/zixcel-graph",
+  "purpose": "Store a reviewed set of relationships as an exact snapshot and update it with revision checks.",
+  "responsibility_boundary": "Own the named reusable integration/data mechanism. Product roles/UI and operational approvals stay with consumers; transport/custody reuse managed Crowsi components where capabilities fit. Planning-only APIs must remain clearly distinguished from implemented external operations.",
+  "packages": [
+    {
+      "manifest": "Cargo.toml",
+      "package": "zixcel-graph",
+      "ecosystem": "rust",
+      "description": "Reusable embedded typed property multigraph for the Zixcel ecosystem",
+      "interfaces": {
+        "lib": "src/lib.rs",
+        "features": {
+          "default": [],
+          "graph": [
+            "dep:serde_json"
+          ],
+          "redb": [
+            "dep:redb",
+            "dep:serde_json",
+            "zixcel-revision/redb"
+          ]
+        },
+        "bins": [],
+        "public_modules": [],
+        "public_reexports": [
+          "external_port::GraphExternalRetention",
+          "startup::{StartedGraph, StoragePhase}",
+          "error::GraphError",
+          "graph::Graph",
+          "model::{Direction, Edge, EdgeDirection, GraphMetadata, GraphSpace, Node, PropertyValue}",
+          "publication::{\n    GraphChanges, GraphPublication, GraphReadDependency, MAX_READ_DEPENDENCIES, PublicationIntent,\n    PublicationRequest,\n}",
+          "query::{GraphPath, Query, QueryResult, Traversal, TraversalResult}",
+          "transaction::{ReadTransaction, WriteTransaction}",
+          "read_budget::ReadBudget",
+          "write_budget::{BudgetedWriteTransaction, WriteBudget}",
+          "storage_budget::StorageValidationBudget"
+        ],
+        "implicit_bins": []
+      },
+      "declared_commands": {}
+    },
+    {
+      "manifest": "conformance/lifecycle/Cargo.toml",
+      "package": "graph-lifecycle-conformance",
+      "ecosystem": "rust",
+      "description": null,
+      "interfaces": {
+        "lib": null,
+        "features": {
+          "default": [
+            "graph",
+            "redb"
+          ],
+          "graph": [
+            "zixcel-graph/graph"
+          ],
+          "redb": [
+            "zixcel-graph/redb"
+          ]
+        },
+        "bins": [],
+        "implicit_bins": []
+      },
+      "declared_commands": {}
+    }
+  ],
+  "schema_definitions": [],
+  "test_sources": [
+    "conformance/lifecycle/src/main.rs",
+    "examples/budgeted-write.rs",
+    "examples/resource-budget.rs",
+    "src/backend/failure_tests.rs",
+    "src/backend/redb.rs",
+    "src/error.rs",
+    "src/external_port.rs",
+    "src/publication.rs",
+    "src/read_budget.rs",
+    "src/startup.rs",
+    "src/startup/tests.rs",
+    "src/transaction.rs",
+    "src/write_budget.rs",
+    "tests/architecture.test.mjs",
+    "tests/backend_recovery.rs",
+    "tests/control_publication.rs",
+    "tests/graph_acceptance.rs",
+    "tests/lifecycle_closure.rs",
+    "tests/read_budget.rs",
+    "tests/read_dependencies.rs",
+    "tests/recovery_barrier.c",
+    "tests/registration_owner_port.rs",
+    "tests/shutdown_barriers.rs",
+    "tests/space_range.rs",
+    "tests/storage_budget.rs",
+    "tests/storage_startup.rs",
+    "tests/topology_fixture.rs",
+    "tests/write_budget.rs"
+  ],
+  "example_sources": [
+    "examples/budgeted-write.rs",
+    "examples/resource-budget.rs"
+  ],
+  "workflow_definitions": [
+    {
+      "path": ".github/workflows/cargo-package.yml",
+      "jobs": [
+        {
+          "job": "cargo-package",
+          "condition": null,
+          "runs_on": "ubuntu-24.04",
+          "steps": [
+            {
+              "name": null,
+              "run": null,
+              "uses": "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "condition": null
+            },
+            {
+              "name": "Isolate public registry configuration and build output",
+              "run": "echo \"CARGO_HOME=$RUNNER_TEMP/public-cargo-home\" >> \"$GITHUB_ENV\"\necho \"CARGO_TARGET_DIR=$RUNNER_TEMP/public-cargo-target\" >> \"$GITHUB_ENV\"\n",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": "Install the declared Rust toolchain",
+              "run": "rustup toolchain install 1.97 --profile minimal --component rustfmt --component clippy",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": "Check formatting and all-feature lints",
+              "run": "cargo +1.97 fmt --all -- --check\ncargo +1.97 clippy --locked --all-targets --all-features -- -D warnings\n",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": "Exercise behavioral and documentation tests",
+              "run": "cargo +1.97 test --locked --all-features",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": "Generate and build the independent public package",
+              "run": "cargo +1.97 package --locked --registry crates-io",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": "Record exact source and package bytes",
+              "run": "mkdir -p \"$GITHUB_WORKSPACE/outgoing\"\ncp \"$CARGO_TARGET_DIR/package/zixcel-graph-0.10.0.crate\" \"$GITHUB_WORKSPACE/outgoing/\"\nprintf '%s\\n' \"$EXPECTED_SHA\" > \"$GITHUB_WORKSPACE/outgoing/source-sha.txt\"\ncd \"$GITHUB_WORKSPACE/outgoing\"\nsha256sum zixcel-graph-0.10.0.crate > SHA256SUMS\n",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": null,
+              "run": null,
+              "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "condition": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/oss-policy.yml",
+      "jobs": [
+        {
+          "job": "repository-policy",
+          "condition": null,
+          "runs_on": "ubuntu-latest",
+          "steps": [
+            {
+              "name": null,
+              "run": null,
+              "uses": "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "condition": null
+            },
+            {
+              "name": "Verify repository policy",
+              "run": "python3 .github/oss-policy-check.py",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": "Verify policy regression tests",
+              "run": "cd .github && python3 -m unittest discover -s policy-tests",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": "Check policy types",
+              "run": "python3 -m venv \"$RUNNER_TEMP/policy-types\"\n\"$RUNNER_TEMP/policy-types/bin/pip\" install -r .github/policy/requirements.txt\n\"$RUNNER_TEMP/policy-types/bin/mypy\" --strict .github/policy .github/oss-policy-check.py .github/policy-tests\n",
+              "uses": null,
+              "condition": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/registry-conformance.yml",
+      "jobs": [
+        {
+          "job": "registry-conformance",
+          "condition": null,
+          "runs_on": "ubuntu-24.04",
+          "steps": [
+            {
+              "name": null,
+              "run": null,
+              "uses": "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+              "condition": null
+            },
+            {
+              "name": null,
+              "run": "rustup toolchain install 1.97.1 --profile minimal",
+              "uses": null,
+              "condition": null
+            },
+            {
+              "name": "Verify published graph lifecycle",
+              "run": "cargo +1.97.1 test --locked --all-features",
+              "uses": null,
+              "condition": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "evidence_policy": "Declarations and source paths are not proof of an executed acceptance. Exact CI head and result are recorded separately. No live accounts or production acceptance is inferred."
+}

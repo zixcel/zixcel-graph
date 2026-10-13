@@ -208,6 +208,7 @@ pub struct WriteTransaction {
     state: SpaceState,
     touched_nodes: BTreeSet<String>,
     touched_edges: BTreeSet<String>,
+    pub(crate) budget: Option<crate::ReadBudget>,
 }
 
 impl WriteTransaction {
@@ -223,6 +224,7 @@ impl WriteTransaction {
             state: state.graph,
             touched_nodes: BTreeSet::new(),
             touched_edges: BTreeSet::new(),
+            budget: None,
         }
     }
 
@@ -298,7 +300,13 @@ impl WriteTransaction {
         let graph = crate::Graph {
             storage: self.storage,
         };
-        let result = graph.publish(&self.space, &request, |_| Ok(changes), || Ok(()))?;
+        let result = graph.publish_with_budget(
+            &self.space,
+            &request,
+            self.budget,
+            |_| Ok(changes),
+            || Ok(()),
+        )?;
         match result.outcome {
             zixcel_revision::CommitOutcome::Committed(r)
             | zixcel_revision::CommitOutcome::NoChange(r) => Ok(r.committed_revision.sequence),

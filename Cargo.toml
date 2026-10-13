@@ -1,5 +1,5 @@
 [package]
-include = ["src/**", "tests/**", "schemas/**", "docs/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE*", "NOTICE*"]
+include = ["src/**", "tests/**", "examples/**", "schemas/**", "docs/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE*", "NOTICE*"]
 name = "zixcel-graph"
 version = "0.10.0"
 edition = "2024"

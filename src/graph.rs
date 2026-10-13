@@ -72,6 +72,21 @@ impl Graph {
         Ok(ReadTransaction::new(self.storage.load(space)?))
     }
 
+    /// Materialize one space only within explicit record/index/source-byte limits.
+    /// Redb checks stored bytes before decoding; memory checks before cloning.
+    /// # Errors
+    /// Exceeding a limit returns an error, never a partial snapshot or fallback.
+    /// This bounds input size/counts, not allocator overhead or total process RSS.
+    pub fn read_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<ReadTransaction, GraphError> {
+        Ok(ReadTransaction::new(
+            self.storage.load_budgeted(space, budget)?,
+        ))
+    }
+
     /// Read data and its covering canonical revision from the same physical snapshot.
     /// # Errors
     /// Invalid/unavailable state is never initialized or repaired.
@@ -80,6 +95,20 @@ impl Graph {
         space: &GraphSpace,
     ) -> Result<(ReadTransaction, zixcel_revision::RevisionRef), GraphError> {
         let snapshot = self.storage.snapshot(space)?;
+        let revision = snapshot.commits.head_revision(space.as_str());
+        Ok((ReadTransaction::new(snapshot.graph), revision))
+    }
+
+    /// Read bounded data and canonical revision from the same physical snapshot.
+    /// # Errors
+    /// Capacity exhaustion returns no data or revision and never repairs storage.
+    /// Limits cover source bytes/records, not process RSS or retained snapshots.
+    pub fn read_exact_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<(ReadTransaction, zixcel_revision::RevisionRef), GraphError> {
+        let snapshot = self.storage.snapshot_budgeted(space, budget)?;
         let revision = snapshot.commits.head_revision(space.as_str());
         Ok((ReadTransaction::new(snapshot.graph), revision))
     }
@@ -95,6 +124,35 @@ impl Graph {
             space.clone(),
             state,
         ))
+    }
+
+    /// Begin a write with bounded snapshot and cumulative mutation admission.
+    /// # Errors
+    /// Oversized existing state is rejected before cloning/decoding. Later mutation
+    /// refusal poisons the whole transaction; no prefix is committed.
+    pub fn write_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::WriteBudget,
+    ) -> Result<crate::BudgetedWriteTransaction, GraphError> {
+        let snapshot = self.storage.snapshot_budgeted(space, budget.snapshot)?;
+        let mut transaction =
+            WriteTransaction::new(Arc::clone(&self.storage), space.clone(), snapshot);
+        transaction.budget = Some(budget.snapshot);
+        Ok(crate::BudgetedWriteTransaction::new(transaction, budget))
+    }
+
+    /// Validate all existing spaces within one cumulative storage budget.
+    /// # Errors
+    /// Quota exhaustion/cancellation returns no acceptance and never repairs data.
+    /// Checks cancellation between spaces; it does not interrupt a single record
+    /// decode or backend lock acquisition. No cache/RSS or physical disk bound is implied.
+    pub fn validate_storage_budgeted(
+        &self,
+        budget: crate::StorageValidationBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError> {
+        self.storage.validate_budgeted(budget, cancelled)
     }
 
     /// Rebuilds derived indexes atomically from primary node and edge records.

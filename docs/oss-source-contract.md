@@ -1,0 +1,97 @@
+# OSS source contract: zixcel/zixcel-graph
+
+Store a reviewed set of relationships as an exact snapshot and update it with revision checks.
+
+## Responsibility boundary
+
+Own the named reusable integration/data mechanism. Product roles/UI and operational approvals stay with consumers; transport/custody reuse managed Crowsi components where capabilities fit. Planning-only APIs must remain clearly distinguished from implemented external operations.
+
+Same-function managed packages take priority when their actual capabilities fit. Do not add an unrelated dependency merely to connect organizations. Preserve upstream LICENSE/NOTICE and immutable release/history evidence; unused compatibility sources belong in Git history, not the supported API.
+
+## Package ownership
+
+| Manifest | Package | Distribution policy |
+| --- | --- | --- |
+| `Cargo.toml` | `zixcel-graph` | declared registry candidate; verify actual registry artifact |
+| `conformance/lifecycle/Cargo.toml` | `graph-lifecycle-conformance` | source-only; publish=false |
+
+Manifest versions and publish flags are declarations, not proof of published availability. Public npm exports and Rust implementation/docs belong to the manifests above; generated dist and sibling checkouts are not source-of-truth implementations.
+
+## Source completion criteria
+
+1. The documented purpose, public exports, validators/schema and actual implementation agree. Remove only confirmed-unused aliases, schemas and compatibility adapters after checking consumers; a shared field name does not imply a shared trust responsibility.
+2. Runtime and official dependency resolution work from an independent checkout with committed locks. No local sibling artifact, private registry or ambient owner credential is required for the OSS source path.
+3. Supported behavior has reproducible examples/playground and functional tests, including invalid input and relevant failure/cancellation/replay/tenant boundaries. A policy-only CI or planning fixture does not prove external effects.
+4. CI runs the declared functional acceptance without disguising skipped/unavailable checks as success. Changed public package bytes receive a new reviewed release; immutable old versions are never overwritten.
+5. License/NOTICE, security reporting, usage and the actual supported/unsupported scope stay in the owning repository. The owner operates independently of a central private management checkout.
+6. Source acceptance, artifact/registry acceptance and production deployment are separate records. This document defines the target; it does not declare unexecuted tests, unreleased APIs or live-account validation completed.
+
+## Existing verification entrypoints
+
+- [.github/workflows/cargo-package.yml](../.github/workflows/cargo-package.yml)
+- [.github/workflows/oss-policy.yml](../.github/workflows/oss-policy.yml)
+- [.github/workflows/registry-conformance.yml](../.github/workflows/registry-conformance.yml)
+
+Use the package scripts/owner CI above and the repository README for exact commands. When schema files exist, their canonical validator and consumer must be checked together; deleting a definition on a text search alone is insufficient.
+
+## Acceptance record
+
+Inventory baseline source: `b6cf6563e02548244fa76a55b43e37260be619b0`. This baseline records observed files and declared interfaces, not a completed audit. Subsequent source changes are accepted at their exact commit with test evidence. Production hosting, account login, secret custody installation and data migration remain outside source-only acceptance.
+
+## Resource acceptance
+
+See [resource boundary and measurements](resources/README.md). Exact-space range reads and differential persistence are implemented and retain transaction semantics. Complete selected-space materialization remains an explicit constraint; Issue #113 tracks bounded storage and operating budgets. No target hardware/RAM guarantee is inferred from source tests.
+
+## Exact snapshot admission
+
+The source APIs `read_budgeted` and `read_exact_budgeted` share `ReadBudget`.
+The latter returns data and canonical revision from one storage snapshot, preserving
+optimistic concurrency identity. Both memory and redb reject capacity overflow
+without partial results or changing durable state. `tests/read_budget.rs` covers
+counts, bytes, index entries, edges, exact revisions and retained prior snapshots.
+Write/startup/retention/process-RSS budgets remain tracked in coela-release#113;
+these read APIs alone do not fulfill the complete resource target.
+
+## Owned source and acceptance map
+
+[oss-source-map.json](oss-source-map.json) is the tracked map of package
+interfaces, declared commands, schemas, functional test sources, examples and CI
+jobs. It keeps each responsibility attached to its actual physical source owner.
+Public exports are supported only within this repository's responsibility boundary;
+a filename or schema declaration does not grant product or cloud authority.
+
+| Package | Canonical manifest | Responsibility/interface |
+| --- | --- | --- |
+| `zixcel-graph` | [Cargo.toml](../Cargo.toml) | Reusable embedded typed property multigraph for the Zixcel ecosystem |
+| `graph-lifecycle-conformance` | [conformance/lifecycle/Cargo.toml](../conformance/lifecycle/Cargo.toml) | Declared Rust public modules/reexports and binary targets |
+
+For source acceptance, run each applicable functional CI job with the committed
+locks from an independent checkout. Match public entrypoints to their test/example
+sources in the map; test the relevant invalid input and failure boundary as well as
+the normal path. Policy-only, skipped and credential-dependent jobs do not establish
+functional coverage. Release jobs establish artifact acceptance only when actually
+run at the reviewed commit. A source-only/example repository must not be presented
+as a complete external service or a released package.
+
+Schema definitions in the map remain owned by their canonical validator and
+consumers. An absent schema file means no separate schema file is declared; it does
+not mean the runtime interface has no validation. Do not introduce another common
+schema solely to mirror an implementation type.
+
+## Budgeted mutation and atomic publication
+
+`WriteBudget` belongs to the graph implementation policy, not a product authority
+schema. `BudgetedWriteTransaction` admits cumulative mutation counts/bytes, poisons
+refused writes, and uses the same canonical revision publication path as existing
+transactions. Preview and backend writer-fence checks admit the complete stored
+state/receipt image before persistence. `tests/write_budget.rs` and the synthetic
+`examples/budgeted-write.rs` cover actual values/revisions and refusal without a
+successful-prefix commit. Per-write data bounds do not complete global RAM/cache,
+startup or retained-snapshot quotas; #113 remains open.
+
+`StorageValidationBudget` separately admits the whole existing storage image;
+record quotas are cumulative across spaces, not silently reset per space. Three
+memory/durable/cancellation tests verify refusal without mutation and successful
+revalidation/reopen. This is a read-only validation API pending release. Backend
+opening, cache/RSS, physical disk, aggregate retained snapshots and interruption
+within a large space still require separate resource ownership/acceptance in #113.

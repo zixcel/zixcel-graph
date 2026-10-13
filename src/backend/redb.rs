@@ -48,6 +48,7 @@ fn dependency_with_orphan_revision_image_is_corrupt_not_empty() {
             space: source,
             expected_revision: zixcel_revision::RevisionRef::default(),
         }],
+        None,
         Box::new(|_, _| panic!("corrupt source must not reach target application")),
     );
     assert!(matches!(result, Err(GraphError::Commit(Failure::Corrupt))));
@@ -96,6 +97,19 @@ impl RedbStorage {
         Self::existing(path, true)
     }
     pub(crate) fn validate_all(&self) -> Result<(), GraphError> {
+        self.validate_all_with_budget(
+            usize::MAX,
+            crate::read_budget::Counter::unlimited(),
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+    }
+    fn validate_all_with_budget(
+        &self,
+        max_spaces: usize,
+        mut counter: crate::read_budget::Counter,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError> {
+        crate::storage_budget::check_cancelled(cancelled)?;
         self.database.read(|read| {
             let allowed = [
                 COMMITS.name(),
@@ -122,15 +136,26 @@ impl RedbStorage {
                 }
             }
             let spaces = read.open_table(SPACES).map_err(storage)?;
+            let mut count = 0usize;
             for entry in spaces.iter().map_err(storage)? {
+                crate::storage_budget::check_cancelled(cancelled)?;
+                count = count
+                    .checked_add(1)
+                    .filter(|n| *n <= max_spaces)
+                    .ok_or(Failure::Capacity)?;
                 let (id, _) = entry.map_err(storage)?;
-                Self::load_from_read(read, &GraphSpace::new(id.value())?, true)?;
+                counter.bytes(id.value().len() + 8)?;
+                Self::load_from_read(read, &GraphSpace::new(id.value())?, true, &mut counter)?;
             }
             // Orphan revision images must not disappear from startup validation.
             let commits = read.open_table(COMMITS).map_err(storage)?;
             for entry in commits.iter().map_err(storage)? {
                 let (id, _) = entry.map_err(storage)?;
-                read_commits(read, &GraphSpace::new(id.value())?)?;
+                crate::storage_budget::check_cancelled(cancelled)?;
+                // Valid spaces already validated/charged their exact commit image.
+                if spaces.get(id.value()).map_err(storage)?.is_none() {
+                    return Err(Failure::Corrupt.into());
+                }
             }
             // No primary/index row may hide outside the set of validated spaces.
             for table in [NODES, EDGES] {
@@ -139,7 +164,7 @@ impl RedbStorage {
             for table in [NODE_LABELS, EDGE_LABELS, OUTGOING, INCOMING] {
                 validate_key_spaces(read, table, &spaces)?;
             }
-            Ok(())
+            crate::storage_budget::check_cancelled(cancelled)
         })
     }
     fn existing(path: &Path, recover: bool) -> Result<Self, GraphError> {
@@ -198,7 +223,16 @@ impl RedbStorage {
         read: &redb::ReadTransaction,
         space: &GraphSpace,
         load_indexes: bool,
+        budget: &mut crate::read_budget::Counter,
     ) -> Result<SpaceState, GraphError> {
+        if let Some(bytes) = read
+            .open_table(COMMITS)
+            .map_err(storage)?
+            .get(space.as_str())
+            .map_err(storage)?
+        {
+            budget.bytes(bytes.value().len())?;
+        }
         read_commits(read, space)?;
         let revision = read
             .open_table(SPACES)
@@ -213,9 +247,15 @@ impl RedbStorage {
         let prefix = key_prefix(space);
         {
             let table = read.open_table(NODES).map_err(storage)?;
-            for entry in table.iter().map_err(storage)? {
+            for entry in table
+                .range(prefix.as_str()..prefix_end(&prefix).as_str())
+                .map_err(storage)?
+            {
                 let (key, value) = entry.map_err(storage)?;
                 if let Some(id) = key.value().strip_prefix(&prefix) {
+                    budget.node()?;
+                    budget.bytes(key.value().len())?;
+                    budget.bytes(value.value().len())?;
                     let node = serde_json::from_slice(value.value()).map_err(codec)?;
                     state.nodes.insert(id.to_owned(), node);
                 }
@@ -223,19 +263,25 @@ impl RedbStorage {
         }
         {
             let table = read.open_table(EDGES).map_err(storage)?;
-            for entry in table.iter().map_err(storage)? {
+            for entry in table
+                .range(prefix.as_str()..prefix_end(&prefix).as_str())
+                .map_err(storage)?
+            {
                 let (key, value) = entry.map_err(storage)?;
                 if let Some(id) = key.value().strip_prefix(&prefix) {
+                    budget.edge()?;
+                    budget.bytes(key.value().len())?;
+                    budget.bytes(value.value().len())?;
                     let edge = serde_json::from_slice(value.value()).map_err(codec)?;
                     state.edges.insert(id.to_owned(), edge);
                 }
             }
         }
         if load_indexes {
-            load_set_index(read, NODE_LABELS, &prefix, &mut state.node_labels)?;
-            load_set_index(read, EDGE_LABELS, &prefix, &mut state.edge_labels)?;
-            load_set_index(read, OUTGOING, &prefix, &mut state.outgoing)?;
-            load_set_index(read, INCOMING, &prefix, &mut state.incoming)?;
+            load_set_index(read, NODE_LABELS, &prefix, &mut state.node_labels, budget)?;
+            load_set_index(read, EDGE_LABELS, &prefix, &mut state.edge_labels, budget)?;
+            load_set_index(read, OUTGOING, &prefix, &mut state.outgoing, budget)?;
+            load_set_index(read, INCOMING, &prefix, &mut state.incoming, budget)?;
             state.validate()?;
         } else {
             state.rebuild_indexes();
@@ -274,7 +320,12 @@ impl Storage for RedbStorage {
             let write = database.begin_write().map_err(storage)?;
             let read = database.begin_read().map_err(storage)?;
             let mut commits = read_commits(&read, space)?;
-            let graph = Self::load_from_read(&read, space, true)?;
+            let graph = Self::load_from_read(
+                &read,
+                space,
+                true,
+                &mut crate::read_budget::Counter::unlimited(),
+            )?;
             let before = serde_json::to_vec(&commits).map_err(codec)?;
             drop(read);
             #[cfg(test)]
@@ -304,7 +355,31 @@ impl Storage for RedbStorage {
     fn snapshot(&self, space: &GraphSpace) -> Result<StoredSpace, GraphError> {
         self.database.read(|read| {
             Ok(StoredSpace {
-                graph: Self::load_from_read(read, space, true)?,
+                graph: Self::load_from_read(
+                    read,
+                    space,
+                    true,
+                    &mut crate::read_budget::Counter::unlimited(),
+                )?,
+                commits: read_commits(read, space)?,
+            })
+        })
+    }
+    fn snapshot_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<StoredSpace, GraphError> {
+        self.database.read(|read| {
+            // The loader charges commit bytes before decoding. Data and revision
+            // must come from this one physical snapshot, never separate reads.
+            Ok(StoredSpace {
+                graph: Self::load_from_read(
+                    read,
+                    space,
+                    true,
+                    &mut crate::read_budget::Counter::new(budget),
+                )?,
                 commits: read_commits(read, space)?,
             })
         })
@@ -316,14 +391,19 @@ impl Storage for RedbStorage {
         &self,
         space: &GraphSpace,
         dependencies: &[crate::GraphReadDependency],
+        budget: Option<crate::ReadBudget>,
         publish: Publish<'_>,
     ) -> Result<GraphPublication, GraphError> {
         self.database.write(|database| {
             // The database writer excludes both old graph writers and new control publications.
             let write = database.begin_write().map_err(storage)?;
             let read = database.begin_read().map_err(storage)?;
+            let mut counter = budget.map_or_else(
+                crate::read_budget::Counter::unlimited,
+                crate::read_budget::Counter::new,
+            );
             let mut proposed = StoredSpace {
-                graph: Self::load_from_read(&read, space, true)?,
+                graph: Self::load_from_read(&read, space, true, &mut counter)?,
                 commits: read_commits(&read, space)?,
             };
             drop(read);
@@ -368,6 +448,13 @@ impl Storage for RedbStorage {
             };
             let result = publish(&mut proposed, &actual)?;
             if matches!(result.outcome, CommitOutcome::Committed(_)) {
+                if let Some(limits) = budget {
+                    crate::read_budget::Counter::new(limits).stored(
+                        space.as_str(),
+                        &proposed.graph,
+                        &proposed.commits,
+                    )?;
+                }
                 proposed.graph.validate()?;
                 proposed.commits.validate()?;
                 write_state(&write, space, &proposed.graph)?;
@@ -387,6 +474,17 @@ impl Storage for RedbStorage {
             }
             Ok(result)
         })
+    }
+    fn validate_budgeted(
+        &self,
+        budget: crate::StorageValidationBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError> {
+        self.validate_all_with_budget(
+            budget.max_spaces,
+            crate::read_budget::Counter::new(budget.records),
+            cancelled,
+        )
     }
     fn metadata(&self) -> Result<GraphMetadata, GraphError> {
         self.database.read(|read| {
@@ -419,16 +517,41 @@ impl Storage for RedbStorage {
         })
     }
 
+    fn load_budgeted(
+        &self,
+        space: &GraphSpace,
+        limits: crate::ReadBudget,
+    ) -> Result<SpaceState, GraphError> {
+        self.database.read(|read| {
+            Self::load_from_read(
+                read,
+                space,
+                true,
+                &mut crate::read_budget::Counter::new(limits),
+            )
+        })
+    }
     fn load(&self, space: &GraphSpace) -> Result<SpaceState, GraphError> {
-        self.database
-            .read(|read| Self::load_from_read(read, space, true))
+        self.database.read(|read| {
+            Self::load_from_read(
+                read,
+                space,
+                true,
+                &mut crate::read_budget::Counter::unlimited(),
+            )
+        })
     }
 
     fn rebuild_indexes(&self, space: &GraphSpace) -> Result<(), GraphError> {
         self.database.write(|database| {
             let write = database.begin_write().map_err(storage)?;
             let read = database.begin_read().map_err(storage)?;
-            let state = Self::load_from_read(&read, space, false)?;
+            let state = Self::load_from_read(
+                &read,
+                space,
+                false,
+                &mut crate::read_budget::Counter::unlimited(),
+            )?;
             drop(read);
             write_indexes(&write, space, &state)?;
             write.commit().map_err(storage)
@@ -466,6 +589,15 @@ fn key_prefix(space: &GraphSpace) -> String {
     format!("{}\0", space.as_str())
 }
 
+// All stored space prefixes end in NUL; the next byte bounds exactly that space.
+fn prefix_end(prefix: &str) -> String {
+    let mut end = prefix.to_owned();
+    let delimiter = end.pop();
+    debug_assert_eq!(delimiter, Some('\0'));
+    end.push('\u{1}');
+    end
+}
+
 fn index_key(space: &GraphSpace, first: &str, second: &str) -> String {
     format!("{}\0{first}\0{second}", space.as_str())
 }
@@ -475,10 +607,15 @@ fn load_set_index(
     definition: TableDefinition<&str, u8>,
     prefix: &str,
     target: &mut std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    budget: &mut crate::read_budget::Counter,
 ) -> Result<(), GraphError> {
     let table = read.open_table(definition).map_err(storage)?;
-    for entry in table.iter().map_err(storage)? {
+    for entry in table
+        .range(prefix..prefix_end(prefix).as_str())
+        .map_err(storage)?
+    {
         let (key, _) = entry.map_err(storage)?;
+        budget.index(key.value().len())?;
         if let Some(remainder) = key.value().strip_prefix(prefix) {
             let (first, second) = remainder.split_once('\0').ok_or(Failure::Corrupt)?;
             target
@@ -520,27 +657,45 @@ fn write_state(
     {
         let mut nodes = write.open_table(NODES).map_err(storage)?;
         nodes
-            .retain(|key, _| !key.starts_with(&prefix))
+            .retain_in(prefix.as_str()..prefix_end(&prefix).as_str(), |key, _| {
+                key.strip_prefix(&prefix)
+                    .is_some_and(|id| state.nodes.contains_key(id))
+            })
             .map_err(storage)?;
         for node in state.nodes.values() {
             let key = format!("{prefix}{}", node.id);
             let value = serde_json::to_vec(node).map_err(codec)?;
-            nodes
-                .insert(key.as_str(), value.as_slice())
-                .map_err(storage)?;
+            let unchanged = nodes
+                .get(key.as_str())
+                .map_err(storage)?
+                .is_some_and(|current| current.value() == value.as_slice());
+            if !unchanged {
+                nodes
+                    .insert(key.as_str(), value.as_slice())
+                    .map_err(storage)?;
+            }
         }
     }
     {
         let mut edges = write.open_table(EDGES).map_err(storage)?;
         edges
-            .retain(|key, _| !key.starts_with(&prefix))
+            .retain_in(prefix.as_str()..prefix_end(&prefix).as_str(), |key, _| {
+                key.strip_prefix(&prefix)
+                    .is_some_and(|id| state.edges.contains_key(id))
+            })
             .map_err(storage)?;
         for edge in state.edges.values() {
             let key = format!("{prefix}{}", edge.id);
             let value = serde_json::to_vec(edge).map_err(codec)?;
-            edges
-                .insert(key.as_str(), value.as_slice())
-                .map_err(storage)?;
+            let unchanged = edges
+                .get(key.as_str())
+                .map_err(storage)?
+                .is_some_and(|current| current.value() == value.as_slice());
+            if !unchanged {
+                edges
+                    .insert(key.as_str(), value.as_slice())
+                    .map_err(storage)?;
+            }
         }
     }
     write_indexes(write, space, state)
@@ -566,12 +721,20 @@ fn write_set_index(
     let prefix = key_prefix(space);
     let mut table = write.open_table(definition).map_err(storage)?;
     table
-        .retain(|key, _| !key.starts_with(&prefix))
+        .retain_in(prefix.as_str()..prefix_end(&prefix).as_str(), |key, _| {
+            key.strip_prefix(&prefix)
+                .and_then(|v| v.split_once('\0'))
+                .is_some_and(|(first, second)| {
+                    values.get(first).is_some_and(|set| set.contains(second))
+                })
+        })
         .map_err(storage)?;
     for (first, seconds) in values {
         for second in seconds {
             let key = index_key(space, first, second);
-            table.insert(key.as_str(), 0).map_err(storage)?;
+            if table.get(key.as_str()).map_err(storage)?.is_none() {
+                table.insert(key.as_str(), 0).map_err(storage)?;
+            }
         }
     }
     Ok(())

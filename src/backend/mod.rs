@@ -32,14 +32,30 @@ use crate::{GraphError, GraphMetadata, GraphSpace};
 pub(crate) trait Storage: Send + Sync {
     fn lifecycle(&self, space: &GraphSpace, change: LifecycleChange<'_>) -> Result<(), GraphError>;
     fn snapshot(&self, space: &GraphSpace) -> Result<StoredSpace, GraphError>;
+    fn snapshot_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<StoredSpace, GraphError>;
     fn load_commits(&self, space: &GraphSpace) -> Result<CommitState, GraphError>;
     fn publish(
         &self,
         space: &GraphSpace,
         dependencies: &[crate::GraphReadDependency],
+        budget: Option<crate::ReadBudget>,
         publish: Publish<'_>,
     ) -> Result<GraphPublication, GraphError>;
+    fn validate_budgeted(
+        &self,
+        budget: crate::StorageValidationBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError>;
     fn metadata(&self) -> Result<GraphMetadata, GraphError>;
+    fn load_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<SpaceState, GraphError>;
     fn load(&self, space: &GraphSpace) -> Result<SpaceState, GraphError>;
     fn rebuild_indexes(&self, space: &GraphSpace) -> Result<(), GraphError>;
 }
