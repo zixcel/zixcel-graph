@@ -142,6 +142,19 @@ impl Graph {
         Ok(crate::BudgetedWriteTransaction::new(transaction, budget))
     }
 
+    /// Validate all existing spaces within one cumulative storage budget.
+    /// # Errors
+    /// Quota exhaustion/cancellation returns no acceptance and never repairs data.
+    /// Checks cancellation between spaces; it does not interrupt a single record
+    /// decode or backend lock acquisition. No cache/RSS or physical disk bound is implied.
+    pub fn validate_storage_budgeted(
+        &self,
+        budget: crate::StorageValidationBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError> {
+        self.storage.validate_budgeted(budget, cancelled)
+    }
+
     /// Rebuilds derived indexes atomically from primary node and edge records.
     ///
     /// # Errors

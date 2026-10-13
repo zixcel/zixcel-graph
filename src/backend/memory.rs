@@ -131,6 +131,29 @@ impl Storage for MemoryStorage {
         }
         Ok(result)
     }
+    fn validate_budgeted(
+        &self,
+        budget: crate::StorageValidationBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError> {
+        crate::storage_budget::check_cancelled(cancelled)?;
+        let spaces = self
+            .spaces
+            .read()
+            .map_err(|_| zixcel_revision::Failure::Storage)?;
+        if spaces.len() > budget.max_spaces {
+            return Err(zixcel_revision::Failure::Capacity.into());
+        }
+        let mut counter = crate::read_budget::Counter::new(budget.records);
+        for (space, stored) in spaces.iter() {
+            crate::storage_budget::check_cancelled(cancelled)?;
+            counter.bytes(space.len() + 8)?;
+            counter.stored(space, &stored.graph, &stored.commits)?;
+            stored.graph.validate()?;
+            stored.commits.validate()?;
+        }
+        crate::storage_budget::check_cancelled(cancelled)
+    }
     fn metadata(&self) -> Result<GraphMetadata, GraphError> {
         Ok(GraphMetadata {
             format_version: DATABASE_FORMAT_VERSION,

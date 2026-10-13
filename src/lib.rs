@@ -56,3 +56,8 @@ pub use read_budget::ReadBudget;
 mod write_budget;
 #[cfg(feature = "graph")]
 pub use write_budget::{BudgetedWriteTransaction, WriteBudget};
+
+#[cfg(feature = "graph")]
+mod storage_budget;
+#[cfg(feature = "graph")]
+pub use storage_budget::StorageValidationBudget;

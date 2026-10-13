@@ -88,3 +88,10 @@ state/receipt image before persistence. `tests/write_budget.rs` and the syntheti
 `examples/budgeted-write.rs` cover actual values/revisions and refusal without a
 successful-prefix commit. Per-write data bounds do not complete global RAM/cache,
 startup or retained-snapshot quotas; #113 remains open.
+
+`StorageValidationBudget` separately admits the whole existing storage image;
+record quotas are cumulative across spaces, not silently reset per space. Three
+memory/durable/cancellation tests verify refusal without mutation and successful
+revalidation/reopen. This is a read-only validation API pending release. Backend
+opening, cache/RSS, physical disk, aggregate retained snapshots and interruption
+within a large space still require separate resource ownership/acceptance in #113.

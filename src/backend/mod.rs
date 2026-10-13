@@ -45,6 +45,11 @@ pub(crate) trait Storage: Send + Sync {
         budget: Option<crate::ReadBudget>,
         publish: Publish<'_>,
     ) -> Result<GraphPublication, GraphError>;
+    fn validate_budgeted(
+        &self,
+        budget: crate::StorageValidationBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError>;
     fn metadata(&self) -> Result<GraphMetadata, GraphError>;
     fn load_budgeted(
         &self,

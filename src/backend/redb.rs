@@ -97,6 +97,19 @@ impl RedbStorage {
         Self::existing(path, true)
     }
     pub(crate) fn validate_all(&self) -> Result<(), GraphError> {
+        self.validate_all_with_budget(
+            usize::MAX,
+            crate::read_budget::Counter::unlimited(),
+            &std::sync::atomic::AtomicBool::new(false),
+        )
+    }
+    fn validate_all_with_budget(
+        &self,
+        max_spaces: usize,
+        mut counter: crate::read_budget::Counter,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError> {
+        crate::storage_budget::check_cancelled(cancelled)?;
         self.database.read(|read| {
             let allowed = [
                 COMMITS.name(),
@@ -123,20 +136,26 @@ impl RedbStorage {
                 }
             }
             let spaces = read.open_table(SPACES).map_err(storage)?;
+            let mut count = 0usize;
             for entry in spaces.iter().map_err(storage)? {
+                crate::storage_budget::check_cancelled(cancelled)?;
+                count = count
+                    .checked_add(1)
+                    .filter(|n| *n <= max_spaces)
+                    .ok_or(Failure::Capacity)?;
                 let (id, _) = entry.map_err(storage)?;
-                Self::load_from_read(
-                    read,
-                    &GraphSpace::new(id.value())?,
-                    true,
-                    &mut crate::read_budget::Counter::unlimited(),
-                )?;
+                counter.bytes(id.value().len() + 8)?;
+                Self::load_from_read(read, &GraphSpace::new(id.value())?, true, &mut counter)?;
             }
             // Orphan revision images must not disappear from startup validation.
             let commits = read.open_table(COMMITS).map_err(storage)?;
             for entry in commits.iter().map_err(storage)? {
                 let (id, _) = entry.map_err(storage)?;
-                read_commits(read, &GraphSpace::new(id.value())?)?;
+                crate::storage_budget::check_cancelled(cancelled)?;
+                // Valid spaces already validated/charged their exact commit image.
+                if spaces.get(id.value()).map_err(storage)?.is_none() {
+                    return Err(Failure::Corrupt.into());
+                }
             }
             // No primary/index row may hide outside the set of validated spaces.
             for table in [NODES, EDGES] {
@@ -145,7 +164,7 @@ impl RedbStorage {
             for table in [NODE_LABELS, EDGE_LABELS, OUTGOING, INCOMING] {
                 validate_key_spaces(read, table, &spaces)?;
             }
-            Ok(())
+            crate::storage_budget::check_cancelled(cancelled)
         })
     }
     fn existing(path: &Path, recover: bool) -> Result<Self, GraphError> {
@@ -455,6 +474,17 @@ impl Storage for RedbStorage {
             }
             Ok(result)
         })
+    }
+    fn validate_budgeted(
+        &self,
+        budget: crate::StorageValidationBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<(), GraphError> {
+        self.validate_all_with_budget(
+            budget.max_spaces,
+            crate::read_budget::Counter::new(budget.records),
+            cancelled,
+        )
     }
     fn metadata(&self) -> Result<GraphMetadata, GraphError> {
         self.database.read(|read| {

@@ -63,3 +63,15 @@ edge errors, final receipt bytes and concurrent conflicts. Inputs are caller-own
 before the API receives them; this contract bounds retained source/mutation data,
 not allocator overhead, total RSS, database cache, startup, snapshot retention or
 aggregate space count. These remaining resource paths stay in #113.
+
+## Cumulative storage validation
+
+`validate_storage_budgeted(StorageValidationBudget { max_spaces, records },
+&AtomicBool)` validates all existing spaces with one cumulative record/index/byte
+budget. Space-key/revision slots also consume bytes. A pre-set or observed stop
+flag refuses acceptance, and quota/cancellation never initializes, rebuilds or
+repairs storage. Cancellation is checked between spaces and validation phases;
+it does not interrupt lock acquisition or an individual record decode. The API
+validates an already opened backend and does not bound its opening/cache/RSS,
+physical file size, concurrent growth or held snapshots. Existing startup/recovery
+entrypoints retain their explicit behavior and are not claimed budgeted by this API.
