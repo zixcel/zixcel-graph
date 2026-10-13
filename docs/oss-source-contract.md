@@ -95,3 +95,13 @@ memory/durable/cancellation tests verify refusal without mutation and successful
 revalidation/reopen. This is a read-only validation API pending release. Backend
 opening, cache/RSS, physical disk, aggregate retained snapshots and interruption
 within a large space still require separate resource ownership/acceptance in #113.
+
+## Feature-specific source acceptance
+
+CI tests the declared no-feature, `graph`, `redb`, and all-feature builds separately.
+Graph-only memory consumers retain the owner-port lifecycle tests. Durable branches
+and range tests require both `graph` and `redb`; resource measurements require the
+same features. The synthetic memory write example requires only `graph`. These
+conditions preserve the documented revision-only defaults and do not add a backend
+or Graph API implicitly. Linux, including WSL, is the current product target;
+RAM capacity and product workload remain unspecified in #113.

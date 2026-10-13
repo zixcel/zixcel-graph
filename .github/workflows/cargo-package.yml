@@ -28,8 +28,12 @@ jobs:
         run: |
           cargo +1.97 fmt --all -- --check
           cargo +1.97 clippy --locked --all-targets --all-features -- -D warnings
-      - name: Exercise behavioral and documentation tests
-        run: cargo +1.97 test --locked --all-features
+      - name: Exercise behavioral and documentation tests for supported feature sets
+        run: |
+          cargo +1.97 test --locked --all-targets --no-default-features
+          cargo +1.97 test --locked --all-targets --no-default-features --features graph
+          cargo +1.97 test --locked --all-targets --no-default-features --features redb
+          cargo +1.97 test --locked --all-features
       - name: Generate and build the independent public package
         run: cargo +1.97 package --locked --registry crates-io
       - name: Record exact source and package bytes

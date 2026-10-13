@@ -46,6 +46,18 @@ required-features = ["graph", "redb"]
 name = "topology_fixture"
 required-features = ["graph"]
 
+[[test]]
+name = "registration_owner_port"
+required-features = ["graph"]
+
+[[example]]
+name = "resource-budget"
+required-features = ["graph", "redb"]
+
+[[example]]
+name = "budgeted-write"
+required-features = ["graph"]
+
 [lints.rust]
 unsafe_code = "forbid"
 

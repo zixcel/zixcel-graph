@@ -94,8 +94,11 @@ fn scenario(graph: &Graph) {
 #[test]
 fn owner_port_metadata_does_not_publish_graph_domain_state() {
     scenario(&Graph::memory().unwrap());
-    let dir = tempfile::tempdir().unwrap();
-    scenario(&Graph::create(dir.path().join("graph.redb")).unwrap());
+    #[cfg(feature = "redb")]
+    {
+        let dir = tempfile::tempdir().unwrap();
+        scenario(&Graph::create(dir.path().join("graph.redb")).unwrap());
+    }
 }
 
 fn concurrent_publication(graph: &Graph) {
@@ -189,7 +192,10 @@ fn concurrent_publication(graph: &Graph) {
 fn lifecycle_only_port_does_not_conflict_with_current_publication() {
     for _ in 0..8 {
         concurrent_publication(&Graph::memory().unwrap());
-        let dir = tempfile::tempdir().unwrap();
-        concurrent_publication(&Graph::create(dir.path().join("concurrent.redb")).unwrap());
+        #[cfg(feature = "redb")]
+        {
+            let dir = tempfile::tempdir().unwrap();
+            concurrent_publication(&Graph::create(dir.path().join("concurrent.redb")).unwrap());
+        }
     }
 }
