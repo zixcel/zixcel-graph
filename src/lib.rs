@@ -46,3 +46,8 @@ pub use transaction::{ReadTransaction, WriteTransaction};
 pub const DATABASE_FORMAT_VERSION: u32 = 1;
 pub const GRAPH_SCHEMA_VERSION: u32 = 1;
 pub const INDEX_VERSION: u32 = 1;
+
+#[cfg(feature = "graph")]
+mod read_budget;
+#[cfg(feature = "graph")]
+pub use read_budget::ReadBudget;

@@ -40,6 +40,11 @@ pub(crate) trait Storage: Send + Sync {
         publish: Publish<'_>,
     ) -> Result<GraphPublication, GraphError>;
     fn metadata(&self) -> Result<GraphMetadata, GraphError>;
+    fn load_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<SpaceState, GraphError>;
     fn load(&self, space: &GraphSpace) -> Result<SpaceState, GraphError>;
     fn rebuild_indexes(&self, space: &GraphSpace) -> Result<(), GraphError>;
 }

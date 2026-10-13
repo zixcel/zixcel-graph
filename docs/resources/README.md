@@ -24,3 +24,17 @@ Remaining owner work is tracked in coela-oss/coela-release#113: bounded load/sto
 API, allocator and cache attribution, cold/warm repetition, cancellation/ENOSPC and
 crash acceptance, disk admission, target-device budgets and product projection
 rebuild. No OOM, partial commit or memory fallback is an acceptable quota policy.
+
+## Explicit per-read admission
+
+`Graph::read_budgeted(space, ReadBudget { max_nodes, max_edges,
+max_index_entries, max_source_bytes })` is source API pending release. It returns
+an entire valid selected-space snapshot or the existing typed `Failure::Capacity`.
+Redb charges source bytes and record counts before decoding each record, including
+the commit image; memory checks the stored representation before cloning. Index
+keys also consume the explicit budget. The caller supplies limits; there is no
+claim that a particular limit fits a hardware class. No partial result, DB write,
+repair or memory fallback occurs on refusal. Existing unbudgeted APIs, writes,
+startup validation, snapshot retention and allocator overhead remain outside this
+per-read admission contract. Use external process limits for total RSS until those
+separate resource paths have explicit budgets too.

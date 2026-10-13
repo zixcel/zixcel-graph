@@ -72,6 +72,21 @@ impl Graph {
         Ok(ReadTransaction::new(self.storage.load(space)?))
     }
 
+    /// Materialize one space only within explicit record/index/source-byte limits.
+    /// Redb checks stored bytes before decoding; memory checks before cloning.
+    /// # Errors
+    /// Exceeding a limit returns an error, never a partial snapshot or fallback.
+    /// This bounds input size/counts, not allocator overhead or total process RSS.
+    pub fn read_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<ReadTransaction, GraphError> {
+        Ok(ReadTransaction::new(
+            self.storage.load_budgeted(space, budget)?,
+        ))
+    }
+
     /// Read data and its covering canonical revision from the same physical snapshot.
     /// # Errors
     /// Invalid/unavailable state is never initialized or repaired.

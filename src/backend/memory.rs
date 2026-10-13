@@ -106,6 +106,26 @@ impl Storage for MemoryStorage {
         })
     }
 
+    fn load_budgeted(
+        &self,
+        space: &GraphSpace,
+        budget: crate::ReadBudget,
+    ) -> Result<SpaceState, GraphError> {
+        let spaces = self
+            .spaces
+            .read()
+            .map_err(|_| zixcel_revision::Failure::Storage)?;
+        if let Some(stored) = spaces.get(space.as_str()) {
+            crate::read_budget::Counter::new(budget).stored(
+                space.as_str(),
+                &stored.graph,
+                &stored.commits,
+            )?;
+            Ok(stored.graph.clone())
+        } else {
+            Ok(SpaceState::default())
+        }
+    }
     fn load(&self, space: &GraphSpace) -> Result<SpaceState, GraphError> {
         let spaces = self
             .spaces

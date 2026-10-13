@@ -124,7 +124,12 @@ impl RedbStorage {
             let spaces = read.open_table(SPACES).map_err(storage)?;
             for entry in spaces.iter().map_err(storage)? {
                 let (id, _) = entry.map_err(storage)?;
-                Self::load_from_read(read, &GraphSpace::new(id.value())?, true)?;
+                Self::load_from_read(
+                    read,
+                    &GraphSpace::new(id.value())?,
+                    true,
+                    &mut crate::read_budget::Counter::unlimited(),
+                )?;
             }
             // Orphan revision images must not disappear from startup validation.
             let commits = read.open_table(COMMITS).map_err(storage)?;
@@ -198,7 +203,16 @@ impl RedbStorage {
         read: &redb::ReadTransaction,
         space: &GraphSpace,
         load_indexes: bool,
+        budget: &mut crate::read_budget::Counter,
     ) -> Result<SpaceState, GraphError> {
+        if let Some(bytes) = read
+            .open_table(COMMITS)
+            .map_err(storage)?
+            .get(space.as_str())
+            .map_err(storage)?
+        {
+            budget.bytes(bytes.value().len())?;
+        }
         read_commits(read, space)?;
         let revision = read
             .open_table(SPACES)
@@ -219,6 +233,9 @@ impl RedbStorage {
             {
                 let (key, value) = entry.map_err(storage)?;
                 if let Some(id) = key.value().strip_prefix(&prefix) {
+                    budget.node()?;
+                    budget.bytes(key.value().len())?;
+                    budget.bytes(value.value().len())?;
                     let node = serde_json::from_slice(value.value()).map_err(codec)?;
                     state.nodes.insert(id.to_owned(), node);
                 }
@@ -232,16 +249,19 @@ impl RedbStorage {
             {
                 let (key, value) = entry.map_err(storage)?;
                 if let Some(id) = key.value().strip_prefix(&prefix) {
+                    budget.edge()?;
+                    budget.bytes(key.value().len())?;
+                    budget.bytes(value.value().len())?;
                     let edge = serde_json::from_slice(value.value()).map_err(codec)?;
                     state.edges.insert(id.to_owned(), edge);
                 }
             }
         }
         if load_indexes {
-            load_set_index(read, NODE_LABELS, &prefix, &mut state.node_labels)?;
-            load_set_index(read, EDGE_LABELS, &prefix, &mut state.edge_labels)?;
-            load_set_index(read, OUTGOING, &prefix, &mut state.outgoing)?;
-            load_set_index(read, INCOMING, &prefix, &mut state.incoming)?;
+            load_set_index(read, NODE_LABELS, &prefix, &mut state.node_labels, budget)?;
+            load_set_index(read, EDGE_LABELS, &prefix, &mut state.edge_labels, budget)?;
+            load_set_index(read, OUTGOING, &prefix, &mut state.outgoing, budget)?;
+            load_set_index(read, INCOMING, &prefix, &mut state.incoming, budget)?;
             state.validate()?;
         } else {
             state.rebuild_indexes();
@@ -280,7 +300,12 @@ impl Storage for RedbStorage {
             let write = database.begin_write().map_err(storage)?;
             let read = database.begin_read().map_err(storage)?;
             let mut commits = read_commits(&read, space)?;
-            let graph = Self::load_from_read(&read, space, true)?;
+            let graph = Self::load_from_read(
+                &read,
+                space,
+                true,
+                &mut crate::read_budget::Counter::unlimited(),
+            )?;
             let before = serde_json::to_vec(&commits).map_err(codec)?;
             drop(read);
             #[cfg(test)]
@@ -310,7 +335,12 @@ impl Storage for RedbStorage {
     fn snapshot(&self, space: &GraphSpace) -> Result<StoredSpace, GraphError> {
         self.database.read(|read| {
             Ok(StoredSpace {
-                graph: Self::load_from_read(read, space, true)?,
+                graph: Self::load_from_read(
+                    read,
+                    space,
+                    true,
+                    &mut crate::read_budget::Counter::unlimited(),
+                )?,
                 commits: read_commits(read, space)?,
             })
         })
@@ -329,7 +359,12 @@ impl Storage for RedbStorage {
             let write = database.begin_write().map_err(storage)?;
             let read = database.begin_read().map_err(storage)?;
             let mut proposed = StoredSpace {
-                graph: Self::load_from_read(&read, space, true)?,
+                graph: Self::load_from_read(
+                    &read,
+                    space,
+                    true,
+                    &mut crate::read_budget::Counter::unlimited(),
+                )?,
                 commits: read_commits(&read, space)?,
             };
             drop(read);
@@ -425,16 +460,41 @@ impl Storage for RedbStorage {
         })
     }
 
+    fn load_budgeted(
+        &self,
+        space: &GraphSpace,
+        limits: crate::ReadBudget,
+    ) -> Result<SpaceState, GraphError> {
+        self.database.read(|read| {
+            Self::load_from_read(
+                read,
+                space,
+                true,
+                &mut crate::read_budget::Counter::new(limits),
+            )
+        })
+    }
     fn load(&self, space: &GraphSpace) -> Result<SpaceState, GraphError> {
-        self.database
-            .read(|read| Self::load_from_read(read, space, true))
+        self.database.read(|read| {
+            Self::load_from_read(
+                read,
+                space,
+                true,
+                &mut crate::read_budget::Counter::unlimited(),
+            )
+        })
     }
 
     fn rebuild_indexes(&self, space: &GraphSpace) -> Result<(), GraphError> {
         self.database.write(|database| {
             let write = database.begin_write().map_err(storage)?;
             let read = database.begin_read().map_err(storage)?;
-            let state = Self::load_from_read(&read, space, false)?;
+            let state = Self::load_from_read(
+                &read,
+                space,
+                false,
+                &mut crate::read_budget::Counter::unlimited(),
+            )?;
             drop(read);
             write_indexes(&write, space, &state)?;
             write.commit().map_err(storage)
@@ -490,6 +550,7 @@ fn load_set_index(
     definition: TableDefinition<&str, u8>,
     prefix: &str,
     target: &mut std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+    budget: &mut crate::read_budget::Counter,
 ) -> Result<(), GraphError> {
     let table = read.open_table(definition).map_err(storage)?;
     for entry in table
@@ -497,6 +558,7 @@ fn load_set_index(
         .map_err(storage)?
     {
         let (key, _) = entry.map_err(storage)?;
+        budget.index(key.value().len())?;
         if let Some(remainder) = key.value().strip_prefix(prefix) {
             let (first, second) = remainder.split_once('\0').ok_or(Failure::Corrupt)?;
             target
