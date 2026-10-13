@@ -213,7 +213,10 @@ impl RedbStorage {
         let prefix = key_prefix(space);
         {
             let table = read.open_table(NODES).map_err(storage)?;
-            for entry in table.iter().map_err(storage)? {
+            for entry in table
+                .range(prefix.as_str()..prefix_end(&prefix).as_str())
+                .map_err(storage)?
+            {
                 let (key, value) = entry.map_err(storage)?;
                 if let Some(id) = key.value().strip_prefix(&prefix) {
                     let node = serde_json::from_slice(value.value()).map_err(codec)?;
@@ -223,7 +226,10 @@ impl RedbStorage {
         }
         {
             let table = read.open_table(EDGES).map_err(storage)?;
-            for entry in table.iter().map_err(storage)? {
+            for entry in table
+                .range(prefix.as_str()..prefix_end(&prefix).as_str())
+                .map_err(storage)?
+            {
                 let (key, value) = entry.map_err(storage)?;
                 if let Some(id) = key.value().strip_prefix(&prefix) {
                     let edge = serde_json::from_slice(value.value()).map_err(codec)?;
@@ -466,6 +472,15 @@ fn key_prefix(space: &GraphSpace) -> String {
     format!("{}\0", space.as_str())
 }
 
+// All stored space prefixes end in NUL; the next byte bounds exactly that space.
+fn prefix_end(prefix: &str) -> String {
+    let mut end = prefix.to_owned();
+    let delimiter = end.pop();
+    debug_assert_eq!(delimiter, Some('\0'));
+    end.push('\u{1}');
+    end
+}
+
 fn index_key(space: &GraphSpace, first: &str, second: &str) -> String {
     format!("{}\0{first}\0{second}", space.as_str())
 }
@@ -477,7 +492,10 @@ fn load_set_index(
     target: &mut std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
 ) -> Result<(), GraphError> {
     let table = read.open_table(definition).map_err(storage)?;
-    for entry in table.iter().map_err(storage)? {
+    for entry in table
+        .range(prefix..prefix_end(prefix).as_str())
+        .map_err(storage)?
+    {
         let (key, _) = entry.map_err(storage)?;
         if let Some(remainder) = key.value().strip_prefix(prefix) {
             let (first, second) = remainder.split_once('\0').ok_or(Failure::Corrupt)?;
@@ -520,27 +538,45 @@ fn write_state(
     {
         let mut nodes = write.open_table(NODES).map_err(storage)?;
         nodes
-            .retain(|key, _| !key.starts_with(&prefix))
+            .retain_in(prefix.as_str()..prefix_end(&prefix).as_str(), |key, _| {
+                key.strip_prefix(&prefix)
+                    .is_some_and(|id| state.nodes.contains_key(id))
+            })
             .map_err(storage)?;
         for node in state.nodes.values() {
             let key = format!("{prefix}{}", node.id);
             let value = serde_json::to_vec(node).map_err(codec)?;
-            nodes
-                .insert(key.as_str(), value.as_slice())
-                .map_err(storage)?;
+            let unchanged = nodes
+                .get(key.as_str())
+                .map_err(storage)?
+                .is_some_and(|current| current.value() == value.as_slice());
+            if !unchanged {
+                nodes
+                    .insert(key.as_str(), value.as_slice())
+                    .map_err(storage)?;
+            }
         }
     }
     {
         let mut edges = write.open_table(EDGES).map_err(storage)?;
         edges
-            .retain(|key, _| !key.starts_with(&prefix))
+            .retain_in(prefix.as_str()..prefix_end(&prefix).as_str(), |key, _| {
+                key.strip_prefix(&prefix)
+                    .is_some_and(|id| state.edges.contains_key(id))
+            })
             .map_err(storage)?;
         for edge in state.edges.values() {
             let key = format!("{prefix}{}", edge.id);
             let value = serde_json::to_vec(edge).map_err(codec)?;
-            edges
-                .insert(key.as_str(), value.as_slice())
-                .map_err(storage)?;
+            let unchanged = edges
+                .get(key.as_str())
+                .map_err(storage)?
+                .is_some_and(|current| current.value() == value.as_slice());
+            if !unchanged {
+                edges
+                    .insert(key.as_str(), value.as_slice())
+                    .map_err(storage)?;
+            }
         }
     }
     write_indexes(write, space, state)
@@ -566,12 +602,20 @@ fn write_set_index(
     let prefix = key_prefix(space);
     let mut table = write.open_table(definition).map_err(storage)?;
     table
-        .retain(|key, _| !key.starts_with(&prefix))
+        .retain_in(prefix.as_str()..prefix_end(&prefix).as_str(), |key, _| {
+            key.strip_prefix(&prefix)
+                .and_then(|v| v.split_once('\0'))
+                .is_some_and(|(first, second)| {
+                    values.get(first).is_some_and(|set| set.contains(second))
+                })
+        })
         .map_err(storage)?;
     for (first, seconds) in values {
         for second in seconds {
             let key = index_key(space, first, second);
-            table.insert(key.as_str(), 0).map_err(storage)?;
+            if table.get(key.as_str()).map_err(storage)?.is_none() {
+                table.insert(key.as_str(), 0).map_err(storage)?;
+            }
         }
     }
     Ok(())

@@ -37,3 +37,7 @@ Use the package scripts/owner CI above and the repository README for exact comma
 ## Acceptance record
 
 Inventory baseline source: `b6cf6563e02548244fa76a55b43e37260be619b0`. This baseline records observed files and declared interfaces, not a completed audit. Subsequent source changes are accepted at their exact commit with test evidence. Production hosting, account login, secret custody installation and data migration remain outside source-only acceptance.
+
+## Resource acceptance
+
+See [resource boundary and measurements](resources/README.md). Exact-space range reads and differential persistence are implemented and retain transaction semantics. Complete selected-space materialization remains an explicit constraint; Issue #113 tracks bounded storage and operating budgets. No target hardware/RAM guarantee is inferred from source tests.
