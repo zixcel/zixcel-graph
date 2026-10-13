@@ -93,3 +93,20 @@ query results. It is not a total RSS guarantee. No retained snapshot is evicted 
 rewritten when another read is refused; existing revision/conflict rules still apply.
 `tests/read_retention.rs` tests memory/durable parity, exact revisions, caller-budget
 intersection, failed-read release, cross-thread clones, drop and reconfiguration.
+
+## Bounded opening and record-level cancellation
+
+`open_existing_budgeted(path, StorageOpeningBudget { max_file_bytes, validation },
+stop)` rejects non-regular/missing paths, pre-open file-length overflow and
+cancellation, then validates the opened logical image under cumulative quotas.
+It never creates, repairs or falls back to memory. Refusal preserves the file and
+canonical revision. File length is an admission observation, not a filesystem quota
+or protection against subsequent concurrent growth. Backend cache and RSS are not
+bounded by this entrypoint.
+
+Whole-storage cancellation is checked while charging each record/index and while
+streaming memory serialization, as well as during orphan-key scans. A serialization
+interruption retains cancellation identity instead of becoming a capacity refusal.
+Lock acquisition, one redb record decode, graph invariant validation and underlying
+engine opening are still not preempted. The deterministic serialization-stop test
+and storage/open/reopen journeys establish this narrower source acceptance.

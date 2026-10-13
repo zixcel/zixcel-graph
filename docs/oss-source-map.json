@@ -34,7 +34,7 @@
           "transaction::{ReadTransaction, WriteTransaction}",
           "read_budget::ReadBudget",
           "write_budget::{BudgetedWriteTransaction, WriteBudget}",
-          "storage_budget::StorageValidationBudget",
+          "storage_budget::{StorageOpeningBudget, StorageValidationBudget}",
           "read_retention::ReadLimits"
         ],
         "implicit_bins": []
@@ -88,6 +88,7 @@
     "tests/lifecycle_closure.rs",
     "tests/read_budget.rs",
     "tests/read_dependencies.rs",
+    "tests/read_retention.rs",
     "tests/recovery_barrier.c",
     "tests/registration_owner_port.rs",
     "tests/shutdown_barriers.rs",

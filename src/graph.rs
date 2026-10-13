@@ -69,6 +69,29 @@ impl Graph {
         })
     }
 
+    /// Open existing regular storage under explicit file-length and logical validation limits.
+    /// No creation, recovery or memory fallback occurs. This does not bound backend cache/RSS.
+    /// # Errors
+    /// Rejects cancellation, missing/symlinked paths, file-length or validation capacity overflow.
+    #[cfg(feature = "redb")]
+    pub fn open_existing_budgeted(
+        path: impl AsRef<Path>,
+        budget: crate::StorageOpeningBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<Self, GraphError> {
+        crate::storage_budget::check_cancelled(cancelled)?;
+        let metadata = std::fs::symlink_metadata(path.as_ref()).map_err(crate::error::storage)?;
+        if !metadata.file_type().is_file() {
+            return Err(GraphError::InvalidPath(path.as_ref().to_owned()));
+        }
+        if metadata.len() > budget.max_file_bytes {
+            return Err(zixcel_revision::Failure::Capacity.into());
+        }
+        let graph = Self::open_existing(path)?;
+        graph.validate_storage_budgeted(budget.validation, cancelled)?;
+        Ok(graph)
+    }
+
     /// Creates an isolated in-memory graph with the same transactional semantics.
     ///
     /// # Errors

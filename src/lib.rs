@@ -60,7 +60,7 @@ pub use write_budget::{BudgetedWriteTransaction, WriteBudget};
 #[cfg(feature = "graph")]
 mod storage_budget;
 #[cfg(feature = "graph")]
-pub use storage_budget::StorageValidationBudget;
+pub use storage_budget::{StorageOpeningBudget, StorageValidationBudget};
 
 #[cfg(feature = "graph")]
 mod read_retention;

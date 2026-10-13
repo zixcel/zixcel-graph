@@ -144,7 +144,8 @@ impl Storage for MemoryStorage {
         if spaces.len() > budget.max_spaces {
             return Err(zixcel_revision::Failure::Capacity.into());
         }
-        let mut counter = crate::read_budget::Counter::new(budget.records);
+        let mut counter =
+            crate::read_budget::Counter::new(budget.records).with_cancellation(cancelled);
         for (space, stored) in spaces.iter() {
             crate::storage_budget::check_cancelled(cancelled)?;
             counter.bytes(space.len() + 8)?;

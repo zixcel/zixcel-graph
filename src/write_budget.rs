@@ -13,7 +13,7 @@ pub struct WriteBudget {
 
 pub struct BudgetedWriteTransaction {
     inner: WriteTransaction,
-    counter: Counter,
+    counter: Counter<'static>,
     remaining: usize,
     refused: Refusal,
 }
