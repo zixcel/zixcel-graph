@@ -25,6 +25,7 @@ impl Counter {
             bytes: 0,
         }
     }
+    #[cfg(feature = "redb")]
     pub(crate) fn unlimited() -> Self {
         Self::new(ReadBudget {
             max_nodes: usize::MAX,
