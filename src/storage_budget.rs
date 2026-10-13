@@ -14,3 +14,11 @@ pub(crate) fn check_cancelled(cancelled: &AtomicBool) -> Result<(), GraphError> 
         Ok(())
     }
 }
+
+/// Read-only opening admission. File length is checked before backend open;
+/// validation charges the complete logical image after opening, without repair.
+#[derive(Debug, Clone, Copy)]
+pub struct StorageOpeningBudget {
+    pub max_file_bytes: u64,
+    pub validation: StorageValidationBudget,
+}

@@ -103,13 +103,14 @@ impl RedbStorage {
             &std::sync::atomic::AtomicBool::new(false),
         )
     }
-    fn validate_all_with_budget(
+    fn validate_all_with_budget<'a>(
         &self,
         max_spaces: usize,
-        mut counter: crate::read_budget::Counter,
-        cancelled: &std::sync::atomic::AtomicBool,
+        counter: crate::read_budget::Counter<'a>,
+        cancelled: &'a std::sync::atomic::AtomicBool,
     ) -> Result<(), GraphError> {
         crate::storage_budget::check_cancelled(cancelled)?;
+        let mut counter = counter.with_cancellation(cancelled);
         self.database.read(|read| {
             let allowed = [
                 COMMITS.name(),
@@ -159,10 +160,10 @@ impl RedbStorage {
             }
             // No primary/index row may hide outside the set of validated spaces.
             for table in [NODES, EDGES] {
-                validate_key_spaces(read, table, &spaces)?;
+                validate_key_spaces(read, table, &spaces, cancelled)?;
             }
             for table in [NODE_LABELS, EDGE_LABELS, OUTGOING, INCOMING] {
-                validate_key_spaces(read, table, &spaces)?;
+                validate_key_spaces(read, table, &spaces, cancelled)?;
             }
             crate::storage_budget::check_cancelled(cancelled)
         })
@@ -294,6 +295,7 @@ fn validate_key_spaces<V: redb::Value + 'static>(
     read: &redb::ReadTransaction,
     definition: TableDefinition<&str, V>,
     spaces: &redb::ReadOnlyTable<&str, u64>,
+    cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<(), GraphError> {
     for entry in read
         .open_table(definition)
@@ -301,6 +303,7 @@ fn validate_key_spaces<V: redb::Value + 'static>(
         .iter()
         .map_err(storage)?
     {
+        crate::storage_budget::check_cancelled(cancelled)?;
         let (key, _) = entry.map_err(storage)?;
         let (space, suffix) = key.value().split_once('\0').ok_or(Failure::Corrupt)?;
         if suffix.is_empty() || spaces.get(space).map_err(storage)?.is_none() {

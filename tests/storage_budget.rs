@@ -98,3 +98,50 @@ fn empty_storage_accepts_a_zero_budget_without_initializing_a_space() {
         )
         .unwrap();
 }
+
+#[cfg(feature = "redb")]
+#[test]
+fn opening_admits_file_and_logical_limits_without_repair_or_creation() {
+    use zixcel_graph::StorageOpeningBudget;
+    let root = tempfile::tempdir().unwrap();
+    let file = root.path().join("opening.redb");
+    let graph = Graph::create(&file).unwrap();
+    verify(&graph);
+    drop(graph);
+    let original = std::fs::read(&file).unwrap();
+    let stop = AtomicBool::new(false);
+    let allowed = StorageOpeningBudget {
+        max_file_bytes: original.len() as u64,
+        validation: budget(),
+    };
+    let graph = Graph::open_existing_budgeted(&file, allowed, &stop).unwrap();
+    let (_, before) = graph.read_exact(&GraphSpace::new("a").unwrap()).unwrap();
+    drop(graph);
+    let mut refused = allowed;
+    refused.max_file_bytes -= 1;
+    assert!(matches!(
+        Graph::open_existing_budgeted(&file, refused, &stop),
+        Err(GraphError::Commit(zixcel_revision::Failure::Capacity))
+    ));
+    refused = allowed;
+    refused.validation.records.max_nodes = 1;
+    assert!(matches!(
+        Graph::open_existing_budgeted(&file, refused, &stop),
+        Err(GraphError::Commit(zixcel_revision::Failure::Capacity))
+    ));
+    stop.store(true, Ordering::Relaxed);
+    assert!(matches!(
+        Graph::open_existing_budgeted(&file, allowed, &stop),
+        Err(GraphError::Invalid(_))
+    ));
+    stop.store(false, Ordering::Relaxed);
+    let missing = root.path().join("missing.redb");
+    assert!(Graph::open_existing_budgeted(&missing, allowed, &stop).is_err());
+    assert!(!missing.exists());
+    assert_eq!(std::fs::read(&file).unwrap(), original);
+    let graph = Graph::open_existing_budgeted(&file, allowed, &stop).unwrap();
+    assert_eq!(
+        graph.read_exact(&GraphSpace::new("a").unwrap()).unwrap().1,
+        before
+    );
+}
