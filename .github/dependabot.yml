@@ -3,6 +3,7 @@ updates:
 - package-ecosystem: cargo
   directories:
   - /
+  - /conformance/lifecycle
   schedule:
     interval: weekly
     day: wednesday
