@@ -69,6 +69,26 @@ impl Graph {
         })
     }
 
+    /// Admit an existing logical graph from an owner-configured shared physical handle.
+    /// The owner selects cache/open/recovery/path/lease policy before passing the handle.
+    /// This method validates existing tables/data and never initializes or repairs them.
+    /// # Errors
+    /// Rejects cancellation, invalid logical versions/tables and cumulative validation overflow.
+    #[cfg(feature = "redb")]
+    pub fn from_existing_durable_handle(
+        handle: zixcel_revision::durable::Handle,
+        budget: crate::StorageValidationBudget,
+        cancelled: &std::sync::atomic::AtomicBool,
+    ) -> Result<Self, GraphError> {
+        crate::storage_budget::check_cancelled(cancelled)?;
+        let graph = Self {
+            storage: Arc::new(RedbStorage::from_existing_handle(handle)?),
+            read_retention: None,
+        };
+        graph.validate_storage_budgeted(budget, cancelled)?;
+        Ok(graph)
+    }
+
     /// Open existing regular storage under explicit file-length and logical validation limits.
     /// No creation, recovery or memory fallback occurs. This does not bound backend cache/RSS.
     /// # Errors

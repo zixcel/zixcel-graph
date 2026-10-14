@@ -116,3 +116,9 @@ and storage/open/reopen journeys establish this narrower source acceptance.
 `BoundedWriter::new(graph, WriteLimits { transaction: WriteBudget { snapshot, max_updates, max_update_bytes }, max_pending_transactions })` consumes a handle and admits writes through `write` or stricter `write_budgeted`. Clones share admission. A slot is reserved before snapshot materialization and held through commit; snapshot refusal, poisoned mutation, conflict or drop returns it. The family cannot evict an existing transaction or reset its limits.
 
 This bounds concurrent snapshot/mutation staging admitted through this explicit family. Encoded source-byte budgets do not bound Rust allocations, touched-ID collections, transient publication copies, backend cache/RSS or physical disk. Earlier or independent Graph aliases and direct publication APIs are outside this policy. Keep these separate from whole-process and disk admission.
+
+## Shared physical handle admission
+
+`Graph::from_existing_durable_handle(handle, validation_budget, cancelled)` admits an existing logical graph from a physical handle owned by the shared revision foundation. Owners can select cache/open/recovery policy there without duplicating redb construction in Graph. The method checks metadata/tables and cumulative logical records before returning a graph; it never initializes missing logical state or repairs it.
+
+This low-level Rust integration trusts the caller's prior physical path/lease/open/recovery admission. Use ordinary `open_existing_budgeted` for path/file-length admission. Passing a handle does not establish a process memory, disk or authority policy. New cache constructors are source APIs of the accepted revision source; choose matching source or a reviewed release, never infer them from an old archive's version.
