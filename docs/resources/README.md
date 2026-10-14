@@ -110,3 +110,9 @@ interruption retains cancellation identity instead of becoming a capacity refusa
 Lock acquisition, one redb record decode, graph invariant validation and underlying
 engine opening are still not preempted. The deterministic serialization-stop test
 and storage/open/reopen journeys establish this narrower source acceptance.
+
+## Concurrent writer staging
+
+`BoundedWriter::new(graph, WriteLimits { transaction: WriteBudget { snapshot, max_updates, max_update_bytes }, max_pending_transactions })` consumes a handle and admits writes through `write` or stricter `write_budgeted`. Clones share admission. A slot is reserved before snapshot materialization and held through commit; snapshot refusal, poisoned mutation, conflict or drop returns it. The family cannot evict an existing transaction or reset its limits.
+
+This bounds concurrent snapshot/mutation staging admitted through this explicit family. Encoded source-byte budgets do not bound Rust allocations, touched-ID collections, transient publication copies, backend cache/RSS or physical disk. Earlier or independent Graph aliases and direct publication APIs are outside this policy. Keep these separate from whole-process and disk admission.

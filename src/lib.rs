@@ -66,3 +66,8 @@ pub use storage_budget::{StorageOpeningBudget, StorageValidationBudget};
 mod read_retention;
 #[cfg(feature = "graph")]
 pub use read_retention::ReadLimits;
+
+#[cfg(feature = "graph")]
+mod bounded_writer;
+#[cfg(feature = "graph")]
+pub use bounded_writer::{BoundedWriter, WriteLimits};
