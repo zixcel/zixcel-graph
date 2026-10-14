@@ -118,3 +118,7 @@ startup and caller-owned result copies remain distinct #113 work.
 ## Concurrent write admission
 
 `BoundedWriter` owns an explicit writer family with shared `WriteLimits`: reserve before snapshot load, intersect caller budgets, hold through commit, release on every refusal/conflict/drop. The isolated playground tests slot refusal/reuse as well as read retention. `tests/bounded_writer.rs` covers memory/durable atomicity and concurrent clone admission. Other Graph aliases/direct publication, transient copies, cache/RSS and physical disk remain outside this policy and #113 remains open.
+
+## Existing physical-handle integration
+
+Physical cache/open/recovery belongs to the revision foundation. `from_existing_durable_handle` accepts the owner-admitted handle and validates existing logical metadata/tables/records under cumulative quotas and cancellation. It shares validation with ordinary opens; it does not initialize logical state, infer a path/lease decision or replace the owner's resource policy. The integration can compile against the existing public Handle type; source-only cache constructors require matching accepted source or a reviewed release.

@@ -176,13 +176,17 @@ impl RedbStorage {
         {
             return Err(GraphError::InvalidPath(path.to_path_buf()));
         }
-        let backend = Self {
-            database: if recover {
-                zixcel_revision::durable::Handle::recover(path)?
-            } else {
-                zixcel_revision::durable::Handle::open(path)?
-            },
+        let database = if recover {
+            zixcel_revision::durable::Handle::recover(path)?
+        } else {
+            zixcel_revision::durable::Handle::open(path)?
         };
+        Self::from_existing_handle(database)
+    }
+    pub(crate) fn from_existing_handle(
+        database: zixcel_revision::durable::Handle,
+    ) -> Result<Self, GraphError> {
+        let backend = Self { database };
         backend.metadata()?;
         backend.database.read(|read| {
             read.open_table(COMMITS).map_err(|_| Failure::Corrupt)?;

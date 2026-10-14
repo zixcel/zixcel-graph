@@ -97,7 +97,8 @@
     "tests/storage_budget.rs",
     "tests/storage_startup.rs",
     "tests/topology_fixture.rs",
-    "tests/write_budget.rs"
+    "tests/write_budget.rs",
+    "tests/shared_durable_handle.rs"
   ],
   "example_sources": [
     "examples/budgeted-write.rs",
