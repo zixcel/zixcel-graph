@@ -1,5 +1,27 @@
 # Graph resource boundary
 
+## Current development acceptance target
+
+The current target is a Linux/WSL PC with 16 GiB of system RAM. This is a device
+class, not a 16 GiB allocation for Graph or a guaranteed dataset capacity. Prefer
+space-scoped reads, differential writes, configured record/source-byte budgets,
+bounded retained snapshots and writers, and bounded backend cache settings. Use
+the existing explicit refusal/cancellation paths rather than consuming all host
+memory or silently falling back to another backend.
+
+The current development phase accepts resource-conscious implementation and
+synthetic regressions. It does not require establishing hardware-specific minimum
+RAM, maximum graph size or end-to-end NERP latency before other work can continue.
+Revisit measurements and budgets when a real workload exposes a performance
+problem. The limits and remaining physical RSS/disk constraints below remain
+explicit; this target does not turn logical source-byte budgets into OS quotas.
+
+On the current source, all-feature tests passed (47 tests). One debug chain-v1
+sample with 4 spaces, 1,000 nodes and 999 edges per space and 128-byte payloads
+reported process peak RSS 36,760 KiB and DB size 16,781,312 bytes. This is one
+synthetic shared-host observation, not a 16 GiB hardware test or a product SLA.
+Reproduce with the command below; exact timings depend on the host.
+
 Durable reads range over the exact space prefix instead of scanning unrelated node,
 edge and derived-index tables. Durable publication removes only deleted entries
 inside that space, and writes node/edge bytes only when changed. Unchanged index
