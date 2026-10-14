@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "repository": "zixcel/zixcel-graph",
+  "defaultBranch": "main",
+  "requiredWorkflows": [
+    "cargo-package.yml",
+    "oss-policy.yml",
+    "registry-conformance.yml"
+  ],
+  "packages": [
+    {
+      "ecosystem": "cargo",
+      "manifest": "Cargo.toml",
+      "name": "zixcel-graph",
+      "installDirectory": "."
+    }
+  ]
+}
