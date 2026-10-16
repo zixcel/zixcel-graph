@@ -5,8 +5,7 @@ updates:
   - /
   - /conformance/lifecycle
   schedule:
-    interval: weekly
-    day: wednesday
+    interval: daily
     time: '05:00'
     timezone: Asia/Tokyo
   open-pull-requests-limit: 10
@@ -21,8 +20,7 @@ updates:
   directories:
   - /.github/policy
   schedule:
-    interval: weekly
-    day: wednesday
+    interval: daily
     time: '05:00'
     timezone: Asia/Tokyo
   open-pull-requests-limit: 10
@@ -37,8 +35,7 @@ updates:
   directories:
   - /
   schedule:
-    interval: weekly
-    day: wednesday
+    interval: daily
     time: '05:00'
     timezone: Asia/Tokyo
   open-pull-requests-limit: 10
