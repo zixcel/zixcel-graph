@@ -1,4 +1,6 @@
 [package]
+categories = ["data-structures", "database"]
+keywords = ["graph-database", "data-structures", "transactions", "snapshots", "local-first"]
 include = ["src/**", "tests/**", "examples/**", "schemas/**", "docs/**", "Cargo.toml", "Cargo.lock", "README.md", "LICENSE*", "NOTICE*"]
 name = "zixcel-graph"
 version = "0.10.0"
