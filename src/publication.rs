@@ -55,7 +55,14 @@ impl PublicationIntent {
         Ok(PublicationRequest {
             operation_id: self.operation_id.clone(),
             expected_commit_revision: self.expected_commit_revision.clone(),
-            request_digest: format!("{:x}", writer.digest.finalize()),
+            request_digest: (writer.digest.finalize()).iter().fold(
+                String::with_capacity(64),
+                |mut encoded, byte| {
+                    use std::fmt::Write as _;
+                    write!(encoded, "{byte:02x}").expect("writing to String cannot fail");
+                    encoded
+                },
+            ),
             dependencies: Vec::new(),
         })
     }
@@ -99,7 +106,14 @@ impl PublicationRequest {
                 &dependencies,
             ))
             .map_err(|_| Failure::Corrupt)?;
-            self.request_digest = format!("{:x}", Sha256::digest(bytes));
+            self.request_digest = (Sha256::digest(bytes)).iter().fold(
+                String::with_capacity(64),
+                |mut encoded, byte| {
+                    use std::fmt::Write as _;
+                    write!(encoded, "{byte:02x}").expect("writing to String cannot fail");
+                    encoded
+                },
+            );
         }
         self.dependencies = dependencies;
         Ok(self)
