@@ -18,8 +18,8 @@ fn identity(graph: &Graph) -> Value {
         "edges":state.graph.edges,"nodeLabels":state.graph.node_labels,
         "edgeLabels":state.graph.edge_labels,"outgoing":state.graph.outgoing,"incoming":state.graph.incoming});
     let revision = serde_json::to_value(state.commits).unwrap();
-    json!({"graphDigest":format!("{:x}",Sha256::digest(serde_json::to_vec(&graph).unwrap())),
-        "revisionDigest":format!("{:x}",Sha256::digest(serde_json::to_vec(&revision).unwrap())),
+    json!({"graphDigest":(Sha256::digest(serde_json::to_vec(&graph).unwrap())).iter().fold(String::with_capacity(64), |mut encoded, byte| { use std::fmt::Write as _; write!(encoded, "{byte:02x}").expect("writing to String cannot fail"); encoded }),
+        "revisionDigest":(Sha256::digest(serde_json::to_vec(&revision).unwrap())).iter().fold(String::with_capacity(64), |mut encoded, byte| { use std::fmt::Write as _; write!(encoded, "{byte:02x}").expect("writing to String cannot fail"); encoded }),
         "graph":graph,"revision":revision})
 }
 fn original_requests(graph: &Graph) {
