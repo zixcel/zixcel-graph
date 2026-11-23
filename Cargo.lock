@@ -198,9 +198,18 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "redb"
-version = "4.4.0"
+version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39178e0a867f9e3eaa6292a4ab1dd3613f2519c5b564341e1e7b29b270736cc4"
+checksum = "096b1dd5ec053c9c2a5a26a93aafeadf73ebcb710ea54dc3151f17a8e20535ef"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "redb"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11175cc688ba1b9d3cec4fe582fd82cb97e2a82e28ccc8101b7b8030a8003280"
 dependencies = [
  "libc",
 ]
@@ -364,7 +373,7 @@ dependencies = [
 name = "zixcel-graph"
 version = "0.10.0"
 dependencies = [
- "redb",
+ "redb 5.0.0",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -379,7 +388,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8990ba1cf704bf5682e567673ced4af424d2a20f83a843832b299e80df69c583"
 dependencies = [
- "redb",
+ "redb 4.6.0",
  "serde",
  "serde_json",
  "sha2 0.10.9",
